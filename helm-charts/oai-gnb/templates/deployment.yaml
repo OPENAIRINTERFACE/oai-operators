@@ -1,0 +1,249 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ .Chart.Name }}
+  labels:
+    {{- include "oai-gnb.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "oai-gnb.selectorLabels" . | nindent 6 }}
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        {{- include "oai-gnb.selectorLabels" . | nindent 8 }}
+        app: oai-gnb
+    {{- if .Values.multus.n2Interface.create }}
+      annotations:
+        k8s.v1.cni.cncf.io/networks: >-
+          [{
+                 "name": "{{ .Chart.Name }}-n2",
+                 "interface": "n2"
+                {{- if .Values.multus.defaultGateway }}
+                 ,"default-route": ["{{ .Values.multus.defaultGateway }}"]
+                {{- end }}
+          }
+          {{- if .Values.multus.n3Interface.create }}
+          ,{
+                 "name": "{{ .Chart.Name }}-n3",
+                 "interface": "n3"
+                {{- if .Values.multus.n3Interface.Gateway }}
+                ,"gateway": "{{ .Values.multus.n3Interface.Gateway }}"
+                {{- end }}
+          }
+          {{- end }}
+          {{- if .Values.multus.ruInterface.create }}
+          ,{
+                 "name": "{{ .Chart.Name }}-ru",
+                 "interface": "ru"
+                {{- if .Values.multus.ruInterface.Gateway }}
+                ,"gateway": "{{ .Values.multus.ruInterface.Gateway }}"
+                {{- end }}
+          }
+          {{- end }}
+          ]
+    {{- end }}
+    spec:
+      securityContext:
+        {{- toYaml .Values.podSecurityContext | nindent 8 }}
+    {{- if .Values.imagePullSecrets }}
+      imagePullSecrets:
+        {{ toYaml .Values.imagePullSecrets | indent 8 }}
+    {{- end }}
+      containers:
+      - name: gnb
+        image: "{{ .Values.nfimage.repository }}:{{ .Values.nfimage.version }}"
+        imagePullPolicy: {{ .Values.nfimage.pullPolicy }}
+        {{- if .Values.config.mountConfig}}
+        volumeMounts:
+          - mountPath: /opt/oai-gnb/etc/mounted.conf
+            name: configuration
+            subPath: mounted.conf
+        {{- end}}
+          ## USRP B210/B200 Mini
+          # - mountPath: /dev/bus/usb/
+          #   name: usrp
+        {{- if .Values.resources.define}}
+        resources:
+          requests:
+            memory: {{ .Values.resources.requests.nf.memory | quote }}
+            cpu: {{ .Values.resources.requests.nf.cpu | quote }}
+          limits:
+            memory: {{ .Values.resources.limits.nf.memory | quote }}
+            cpu: {{ .Values.resources.limits.nf.cpu | quote }}
+        {{- end}}
+        securityContext:
+           privileged: true
+           # capabilities:
+           #    add:
+           #     - NET_ADMIN
+           #    drop:
+           #     - ALL
+        ports:
+        - containerPort: 2152
+          name: n3
+          protocol: UDP
+        - containerPort: 36412
+          name: n2
+          protocol: SCTP
+        {{- if .Values.start.gnb}}
+        {{- else}}
+        command:
+          - /bin/sleep
+          - infinity
+        {{- end}}
+        env:
+          - name: TZ
+            value: {{ .Values.config.timeZone }}
+          - name: RFSIMULATOR
+            value: {{ .Values.config.rfSimulator }}
+          - name: USE_ADDITIONAL_OPTIONS
+            value: {{ .Values.config.useAdditionalOptions }}
+        {{- if .Values.config.mountConfig}}
+          - name: USE_VOLUMED_CONF
+            value: "yes"
+        {{- end}}
+        {{- if not .Values.config.mountConfig}}
+          - name: USE_SA_TDD_MONO
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: useSATddMono
+          - name: GNB_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: gnbName
+          - name: MCC
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: mcc
+          - name: MNC
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: mnc
+          - name: MNC_LENGTH
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: mncLength
+          - name: TAC
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: tac
+          - name: NSSAI_SST
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: nssaiSst
+          - name: NSSAI_SD0
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: nssaiSd0
+          - name: AMF_IP_ADDRESS
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: amfIpAddress
+          - name: GNB_NGA_IF_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: gnbNgaIfName
+          - name: GNB_NGA_IP_ADDRESS
+            {{- if eq .Values.config.gnbNgaIpAddress "status.podIP" }}
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+            {{- else}}
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: gnbNgaIpAddress
+            {{- end}}
+          - name: GNB_NGU_IF_NAME
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: gnbNguIfName
+          - name: GNB_NGU_IP_ADDRESS
+            {{- if eq .Values.config.gnbNguIpAddress "status.podIP" }}
+            valueFrom:
+              fieldRef:
+                fieldPath: status.podIP
+            {{- else}}
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: gnbNguIpAddress
+            {{- end}}
+          - name: THREAD_PARALLEL_CONFIG
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: threadParallelConfig
+          - name: SDR_ADDRS
+            valueFrom:
+              configMapKeyRef:
+                name: {{ .Chart.Name }}-configmap
+                key: sdrAddrs
+          {{- end}}
+      {{- if .Values.includeTcpDumpContainer }}
+      - name: tcpdump
+        image: "{{ .Values.tcpdumpimage.repository }}:{{ .Values.tcpdumpimage.version }}"
+        imagePullPolicy: {{ .Values.tcpdumpimage.pullPolicy }}
+        {{- if .Values.resources.define}}
+        resources:
+          requests:
+            memory: {{ .Values.resources.requests.tcpdump.memory | quote }}
+            cpu: {{ .Values.resources.requests.tcpdump.cpu | quote }}
+          limits:
+            memory: {{ .Values.resources.limits.tcpdump.memory | quote }}
+            cpu: {{ .Values.resources.limits.tcpdump.cpu | quote }}
+        {{- end}}
+        securityContext:
+           privileged: true
+           capabilities:
+              add:
+               - NET_ADMIN
+              drop:
+               - ALL
+        {{- if .Values.start.tcpdump}}
+        command:
+          - /bin/sh
+          - -c
+          - /usr/sbin/tcpdump -i any -w /tmp/pcap/{{ .Chart.Name }}_`date +%Y-%m-%d_%H_%M-%S-%Z`.pcap
+        {{- else}}
+        command:
+          - /bin/sleep
+          - infinity
+        {{- end}}
+      {{- end }}
+      {{- if.Values.config.mountConfig }}  
+      volumes:
+      - configMap:
+          name: {{ .Chart.Name }}-configmap
+        name: configuration
+      {{- end}}
+      # - name: usrp
+      #   hostPath:
+      #     path: /dev/bus/usb/
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      schedulerName: default-scheduler
+      serviceAccountName: {{ .Values.serviceAccount.name }}
+      terminationGracePeriodSeconds: {{ .Values.terminationGracePeriodSeconds }}
+      {{- if .Values.nodeSelector}}
+      nodeSelector: 
+         {{- toYaml .Values.nodeSelector | nindent 12 }}
+      {{- end }}
+      {{- if .Values.nodeName}}
+      nodeName: {{ .Values.nodeName }}
+      {{- end }}

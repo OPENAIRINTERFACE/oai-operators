@@ -1,0 +1,7 @@
+apiVersion: workload.nephio.org/v1alpha1
+kind: UDRDeployment
+metadata:
+  name: udr-regional
+  namespace: oaicp
+spec:
+  configRefs:

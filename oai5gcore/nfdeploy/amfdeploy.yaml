@@ -1,0 +1,20 @@
+apiVersion: workload.nephio.org/v1alpha1
+kind: AMFDeployment
+metadata:
+  name: amf-regional
+  namespace: oaicp
+spec:
+  capacity:
+    maxDownlinkThroughput: "0"
+    maxSubscribers: 10000
+    maxUplinkThroughput: "0"
+  interfaces:
+  - name: n2
+    ipv4:
+      address: 172.2.2.254/24
+      gateway: 172.2.2.1
+    vlanID: 4
+  networkInstances:
+  - name: vpc-ran
+    interfaces:
+    - n2

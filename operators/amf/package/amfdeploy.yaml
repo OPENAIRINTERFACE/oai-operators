@@ -1,0 +1,17 @@
+apiVersion: workload.nephio.org/v1alpha1
+kind: AMFDeployment
+metadata:
+  name: oai-amf
+spec:
+  capacity:
+    maxSubscribers: 100
+  interfaces:
+  - name: n2
+    ipv4:
+      address: 14.0.0.2/24
+      gateway: 13.0.0.1
+  networkInstances:
+  - name: vpc-ran
+    interfaces:
+    - n2
+  configRefs:

@@ -1,0 +1,6 @@
+apiVersion: workload.nephio.org/v1alpha1
+kind: UDMDeployment
+metadata:
+  name: oai-udm
+spec:
+  configRefs:
