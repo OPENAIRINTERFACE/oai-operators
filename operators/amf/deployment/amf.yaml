@@ -1,0 +1,351 @@
+################################################################################
+# Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The OpenAirInterface Software Alliance licenses this file to You under
+# the OAI Public License, Version 1.1  (the "License"); you may not use this file
+# except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.openairinterface.org/?page_id=698
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#-------------------------------------------------------------------------------
+# For more information about the OpenAirInterface (OAI) Software Alliance:
+#      contact@openairinterface.org
+################################################################################
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: default
+  name: oai-amf-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: oai-amf-operator-cluster-role
+rules:
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch, create, update, patch]
+  # - apiGroups: ["workload.nephio.org"]
+  #   resources: [amfdeployments]
+  #   verbs: [list, watch]
+  - apiGroups: ["workload.nephio.org"]
+    resources: [amfdeployments,amfdeployments/status]
+    verbs: [list, watch, update, patch]
+  - apiGroups: [""]
+    resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
+    verbs:  [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["apps","extensions"]
+    resources: [deployments,deployments/status]
+    verbs:  [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["k8s.cni.cncf.io"]
+    resources: [network-attachment-definitions]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [list, watch]
+  - apiGroups: [admissionregistration.k8s.io/v1, admissionregistration.k8s.io/v1beta1]
+    resources: [validatingwebhookconfigurations, mutatingwebhookconfigurations]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oai-amf-operator-rolebinding-cluster
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: oai-amf-operator-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: oai-amf-operator
+    namespace: default
+## In case you want to restrict to a namespace uncomment this role and remove the rights from cluster role
+#---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: Role
+# metadata:
+#   namespace: default
+#   name: oai-amf-operator-role
+# rules:
+#   # Framework: posting the events about the handlers progress/errors.
+#   - apiGroups: [""]
+#     resources: [events]
+#     verbs: [create]
+#   - apiGroups: ["workload.nephio.org"]
+#     resources: [amfdeployments,amfdeployments/status]
+#     verbs: [list, watch, update, patch]
+#   - apiGroups: [""]
+#     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
+#     verbs:  [get, list, watch, create, update, patch, delete]
+#   - apiGroups: ["apps","extensions"]
+#     resources: [deployments,deployments/status]
+#     verbs:  [get, list, watch, create, update, patch, delete]
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   namespace: default
+#   name: oai-amf-operator-rolebinding-namespaced
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: Role
+#   name: oai-amf-operator-role
+# subjects:
+#   - kind: ServiceAccount
+#     name: oai-amf-operator
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oai-amf-op-conf
+data:
+  amf.yaml: |
+    plmn:
+      mcc: '001'
+      mnc: '01'
+      tac: '0x0001'
+    nssai:
+      - sst: 1
+        sd: '0xFFFFFF'
+      - sst: 1
+        sd: '0x1'
+    image: 'docker.io/oaisoftwarealliance/oai-amf:v1.5.1'
+    fqdn:
+      smf: 'localhost'
+      ausf: 'localhost'
+      nrf: 'localhost'
+      udm: 'localhost'
+    ports: 
+      - name: 'n2'
+        port: 38412
+        protocol: SCTP
+      - name: 'http'
+        port: 80
+        protocol: TCP
+    nfInterfaces:
+      n2: 'n2'
+      sbi: 'eth0'
+    nad: 
+      parent: 'eth1'
+      create: False
+    compute:
+      req:
+        cpu: '100m'
+        memory: '512Mi'
+      limits:
+        cpu: '100m'
+        memory: '512Mi'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oai-amf-nf-conf
+data:
+  amf.conf: |
+    AMF =
+    {
+      INSTANCE_ID = 0;            # 0 is the default
+      PID_DIRECTORY = "/var/run";   # /var/run is the default
+
+      AMF_NAME = "OAI-AMF";
+      LOG_LEVEL = "{{ conf["logLevel"] if "logLevel" in conf.keys() else 'debug' }}";
+
+      RELATIVE_CAPACITY = 30;
+      # Display statistics about whole system (in seconds)
+      STATISTICS_TIMER_INTERVAL = 20;
+
+      CORE_CONFIGURATION:
+      {
+        EMERGENCY_SUPPORT = "false";
+      };
+
+      GUAMI:
+      {
+        MCC = "{{ conf['plmn']['mcc'] }}"; MNC = "{{ conf['plmn']['mnc'] }}"; RegionID = "128"; AMFSetID = "1"; AMFPointer = "1"
+      }
+
+      SERVED_GUAMI_LIST = (
+        {MCC = "{{ conf['plmn']['mcc'] }}"; MNC = "{{ conf['plmn']['mnc'] }}"; RegionID = "128"; AMFSetID = "1"; AMFPointer = "0"}
+      );
+
+      PLMN_SUPPORT_LIST = ({
+        MCC = "{{ conf['plmn']['mcc'] }}"; MNC = "{{ conf['plmn']['mnc'] }}"; TAC = {{ conf['plmn']['tac'] }};
+        SLICE_SUPPORT_LIST = (
+          {SST = {{ conf['nssai'][0]['sst'] }};SD = "{{ conf['nssai'][0]['sd'] }}"}
+          {% do conf['nssai'].pop(0) %}
+          {% for i in conf['nssai'] %}
+          ,{SST = {{ i["sst"] }};SD = "{{ i["sd"] if 'sd' in i.keys() else '0xFFFFFF' }}"}
+          {% endfor %}
+         )
+      });
+
+      INTERFACES:
+      {
+        # AMF binded interface for N1/N2 interface (NGAP)
+        NGAP_AMF:
+        {
+          INTERFACE_NAME = "{{ conf['nfInterfaces']['n2'] if 'nfInterfaces' in conf.keys() and 'n2' in conf['nfInterfaces'].keys() else 'eth0' }}";
+          IPV4_ADDRESS   = "read";
+          PORT           = 38412;
+          PPID           = 60;
+        };
+
+        # AMF binded interface for SBI (N11 (SMF)/N12 (AUSF), etc.)
+        SBI:
+        {
+          INTERFACE_NAME = "{{ conf['nfInterfaces']['sbi'] if 'nfInterfaces' in conf.keys() and 'sbi' in conf['nfInterfaces'].keys() else 'eth0' }}";
+          IPV4_ADDRESS   = "read";
+          PORT           = 80;
+          API_VERSION    = "v1";
+          HTTP2_PORT     = 8080;
+
+          SMF_INSTANCES_POOL = (
+            {SMF_INSTANCE_ID = 1; IPV4_ADDRESS = "127.0.0.1"; PORT = "80"; HTTP2_PORT = 8080, VERSION = "v1"; FQDN = "{{ conf['fqdn']['smf'] if 'fqdn' in conf.keys() and 'smf' in conf['fqdn'].keys() else 'oai-smf' }}", SELECTED = "true"}
+          );
+        };
+
+        NRF :
+        {
+          IPV4_ADDRESS = "127.0.0.1";
+          PORT         = 80;            # Default: 80
+          API_VERSION  = "v1";
+          FQDN         = "{{ conf['fqdn']['nrf'] if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys() else 'oai-nrf' }}"
+        };
+
+        AUSF :
+        {
+          IPV4_ADDRESS = "127.0.0.1";
+          PORT         = 80;            # Default: 80
+          API_VERSION  = "v1";
+          FQDN         = "{{ conf['fqdn']['ausf'] if 'fqdn' in conf.keys() and 'ausf' in conf['fqdn'].keys() else 'oai-ausf' }}"
+        };
+
+        UDM :
+        {
+          IPV4_ADDRESS = "127.0.0.1";
+          PORT         = 80;    # Default: 80
+          API_VERSION  = "v2";
+          FQDN         = "{{ conf['fqdn']['udm'] if 'fqdn' in conf.keys() and 'udm' in conf['fqdn'].keys() else 'oai-udm' }}"
+        };
+
+        NSSF :
+        {
+          IPV4_ADDRESS = "127.0.0.1";
+          PORT         = 80;            # Default: 80
+          API_VERSION  = "v2";
+          FQDN         = "localhost"
+        };
+
+      };
+
+      SUPPORT_FEATURES:
+      {
+         # STRING, {"yes", "no"},
+         NF_REGISTRATION = "yes";  # Set to yes if AMF registers to an NRF
+         NRF_SELECTION   = "no";    # Set to yes to enable NRF discovery and selection
+         EXTERNAL_NRF    = "no";     # Set to yes if AMF works with an external NRF
+         SMF_SELECTION   = "{{ conf['options']['smf_selection'] if 'options' in conf.keys() and 'smf_selection' in conf['options'].keys() else 'no' }}";    # Set to yes to enable SMF discovery and selection
+         EXTERNAL_AUSF   = "yes";    # Set to yes if AMF works with an external AUSF
+         EXTERNAL_UDM    = "{{ conf['options']['external_udm'] if 'options' in conf.keys() and 'external_udm' in conf['options'].keys() else 'no' }}";     # Set to yes if AMF works with an external UDM
+         EXTERNAL_NSSF   = "no";    # Set to yes if AMF works with an external NSSF
+         USE_FQDN_DNS    = "yes";   # Set to yes if AMF relies on a DNS to resolve NRF/SMF/UDM/AUSF's FQDN
+         USE_HTTP2       = "no";        # Set to yes to enable HTTP2 for AMF server
+      }
+
+      AUTHENTICATION:
+      {
+        ## MySQL mandatory options
+        MYSQL_server = "mysql"; # MySQL Server address
+        MYSQL_user   = "test";   # Database server login
+        MYSQL_pass   = "test";   # Database server password
+        MYSQL_db     = "oai_db";     # Your database name
+        RANDOM = "true";
+      };
+
+      NAS:
+      {
+        ORDERED_SUPPORTED_INTEGRITY_ALGORITHM_LIST = [ "NIA1" , "NIA1" , "NIA2" ];
+        ORDERED_SUPPORTED_CIPHERING_ALGORITHM_LIST = [ "NEA0" , "NEA1" , "NEA2" ];
+      };
+
+    };
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oai-amf-controller
+  labels:
+    app.kubernetes.io/name: oai-amf
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oai-amf
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oai-amf
+    spec:
+      securityContext:
+        runAsGroup: 0
+        runAsUser: 0
+      imagePullSecrets:
+      - name: regcred
+      containers:
+      - name: amf-controller
+        image: "oai-amf-controller:v1.5.1"
+        imagePullPolicy: Always
+        env:
+          - name: 'NF_TYPE'
+            value: 'amf'
+          - name: 'DEPLOYMENT_FETCH_INTERVAL'
+            value: '1'
+          - name: 'DEPLOYMENT_FETCH_ITERATIONS'
+            value: '100'
+          - name: 'NF_CONF_PATH'
+            value: '/tmp/nf/amf.conf'
+          - name: 'OP_CONF_PATH'
+            value: '/tmp/op/amf.yaml'
+          - name: 'TESTING'
+            value: 'yes'
+        volumeMounts:
+          - mountPath: /tmp/op
+            name: opconf
+          - mountPath: /tmp/nf
+            name: nfconf
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "100m"
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8080
+          initialDelaySeconds: 2
+          periodSeconds: 5
+      volumes:
+      - configMap:
+          name: oai-amf-op-conf
+        name: opconf
+      - configMap:
+          name: oai-amf-nf-conf
+        name: nfconf
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      serviceAccountName: oai-amf-operator
+      terminationGracePeriodSeconds: 5

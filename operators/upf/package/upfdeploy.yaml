@@ -1,0 +1,38 @@
+apiVersion: workload.nephio.org/v1alpha1
+kind: UPFDeployment
+metadata:
+  name: oai-upf
+  annotations:
+    config.kubernetes.io/local-config: "false"
+spec:
+  capacity:
+    maxUplinkThroughput: 1G
+    maxDownlinkThroughput: 1G
+  interfaces:
+    - name: n3
+      ipv4:
+        address: 13.0.0.2/24
+        gateway: 13.0.0.1
+    - name: n4
+      ipv4:
+        address: 14.0.0.2/24
+        gateway: 14.0.0.1
+    - name: n6
+      ipv4:
+        address: 16.0.0.2/24
+        gateway: 16.0.0.1
+  networkInstances:
+    - name: vpc-ran
+      interfaces:
+        - n3
+    - name: vpc-internal
+      interfaces:
+        - n4
+    - name: vpc-internet
+      interfaces:
+        - n6
+      dataNetworks:
+        - name: internet
+          pool:
+            - prefix: 10.10.0.0/16
+  configRefs:

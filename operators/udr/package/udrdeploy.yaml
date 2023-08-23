@@ -1,0 +1,6 @@
+apiVersion: workload.nephio.org/v1alpha1
+kind: UDRDeployment
+metadata:
+  name: oai-udr
+spec:
+  configRefs:

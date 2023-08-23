@@ -1,0 +1,21 @@
+apiVersion: workload.nephio.org/v1alpha1
+kind: SMFDeployment
+metadata:
+  name: smf-regional
+  namespace: oaicp
+spec:
+  capacity:
+    maxDownlinkThroughput: "0"
+    maxNFConnections: 5
+    maxSessions: 500
+    maxUplinkThroughput: "0"
+  interfaces:
+  - name: n4
+    ipv4:
+      address: 172.1.1.254/24
+      gateway: 172.1.1.1
+    vlanID: 2
+  networkInstances:
+  - name: vpc-internal
+    interfaces:
+    - n4

@@ -1,0 +1,7 @@
+apiVersion: workload.nephio.org/v1alpha1
+kind: NRFDeployment
+metadata:
+  name: nrf-regional
+  namespace: oaicp
+spec:
+  configRefs:

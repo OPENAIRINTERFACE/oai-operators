@@ -1,0 +1,371 @@
+################################################################################
+# Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The OpenAirInterface Software Alliance licenses this file to You under
+# the OAI Public License, Version 1.1  (the "License"); you may not use this file
+# except in compliance with the License.
+# You may obtain a copy of the License at
+#
+#      http://www.openairinterface.org/?page_id=698
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#-------------------------------------------------------------------------------
+# For more information about the OpenAirInterface (OAI) Software Alliance:
+#      contact@openairinterface.org
+################################################################################
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: default
+  name: oai-upf-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: oai-upf-operator-cluster-role
+rules:
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch, create, update, patch]
+  # - apiGroups: ["workload.nephio.org"]
+  #   resources: [upfdeployments]
+  #   verbs: [list, watch]
+  - apiGroups: ["workload.nephio.org"]
+    resources: [upfdeployments,upfdeployments/status]
+    verbs: [list, watch, update, patch]
+  - apiGroups: [""]
+    resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
+    verbs:  [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["apps","extensions"]
+    resources: [deployments,deployments/status]
+    verbs:  [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["k8s.cni.cncf.io"]
+    resources: [network-attachment-definitions]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [list, watch]
+  - apiGroups: [admissionregistration.k8s.io/v1, admissionregistration.k8s.io/v1beta1]
+    resources: [validatingwebhookconfigurations, mutatingwebhookconfigurations]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oai-upf-operator-rolebinding-cluster
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: oai-upf-operator-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: oai-upf-operator
+    namespace: default
+## In case you want to restrict to a namespace uncomment this role and remove the rights from cluster role
+#---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: Role
+# metadata:
+#   namespace: default
+#   name: oai-upf-operator-role
+# rules:
+#   # Framework: posting the events about the handlers progress/errors.
+#   - apiGroups: [""]
+#     resources: [events]
+#     verbs: [create]
+#   - apiGroups: ["workload.nephio.org"]
+#     resources: [upfdeployments,upfdeployments/status]
+#     verbs: [list, watch, update, patch]
+#   - apiGroups: [""]
+#     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
+#     verbs:  [get, list, watch, create, update, patch, delete]
+#   - apiGroups: ["apps","extensions"]
+#     resources: [deployments,deployments/status]
+#     verbs:  [get, list, watch, create, update, patch, delete]
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   namespace: default
+#   name: oai-upf-operator-rolebinding-namespaced
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: Role
+#   name: oai-upf-operator-role
+# subjects:
+#   - kind: ServiceAccount
+#     name: oai-upf-operator
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oai-upf-op-conf
+data:
+  upf.yaml: |
+    image: 'docker.io/oaisoftwarealliance/oai-spgwu-tiny:v1.5.1'
+    fqdn:
+      nrf: 'localhost'
+    ports: 
+      - name: 'n3'
+        port: 2152
+        protocol: UDP
+      - name: 'n4'
+        port: 8805
+        protocol: UDP
+      - name: 'http'
+        port: 80
+        protocol: TCP
+    nfInterfaces:
+      n3: 'n3'
+      n4: 'n4'
+      n6: 'n6'
+    nad: 
+      parent: 'eth0'
+      create: False
+    compute:
+      req:
+        cpu: '100m'
+        memory: '512Mi'
+      limits:
+        cpu: '100m'
+        memory: '512Mi'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oai-upf-nf-conf
+data:
+  upf.conf: |
+    SPGW-U =
+    {
+        # FQDN for 4G
+        FQDN = "oai-spgwu-tiny";
+        # 0 is the default
+        INSTANCE      = 0;
+        # /var/run is the default
+        PID_DIRECTORY = "/var/run";
+        LOG_LEVEL     = "{{ conf["logLevel"] if "logLevel" in conf.keys() else 'debug' }}";
+
+        #ITTI_TASKS :
+        #{
+            #ITTI_TIMER_SCHED_PARAMS :
+            #{
+                #CPU_ID       = 1;
+                #SCHED_POLICY = "SCHED_FIFO"; # Values in { SCHED_OTHER, SCHED_IDLE, SCHED_BATCH, SCHED_FIFO, SCHED_RR }
+                #SCHED_PRIORITY = 85;
+            #};
+            #S1U_SCHED_PARAMS :
+            #{
+                #CPU_ID       = 1;
+                #SCHED_POLICY = "SCHED_FIFO"; # Values in { SCHED_OTHER, SCHED_IDLE, SCHED_BATCH, SCHED_FIFO, SCHED_RR }
+                #SCHED_PRIORITY = 84;
+            #};
+            #SX_SCHED_PARAMS :
+            #{
+                #CPU_ID       = 1;
+                #SCHED_POLICY = "SCHED_FIFO"; # Values in { SCHED_OTHER, SCHED_IDLE, SCHED_BATCH, SCHED_FIFO, SCHED_RR }
+                #SCHED_PRIORITY = 84;
+            #};
+            #ASYNC_CMD_SCHED_PARAMS :
+            #{
+                #CPU_ID       = 1;
+                #SCHED_POLICY = "SCHED_FIFO"; # Values in { SCHED_OTHER, SCHED_IDLE, SCHED_BATCH, SCHED_FIFO, SCHED_RR }
+                #SCHED_PRIORITY = 84;
+            #};
+        #};
+
+        INTERFACES :
+        {
+            S1U_S12_S4_UP :
+            {
+                # S-GW binded interface for S1-U communication (GTPV1-U) can be ethernet interface, virtual ethernet interface, we don't advise wireless interfaces
+                # STRING, interface name, YOUR NETWORK CONFIG HERE
+                INTERFACE_NAME         = "{{ conf['nfInterfaces']['n3'] if 'nfInterfaces' in conf.keys() and 'n3' in conf['nfInterfaces'].keys() else 'eth0' }}";
+                # STRING, CIDR or "read to let app read interface configured IP address
+                IPV4_ADDRESS           = "read";
+                #PORT                   = 2152;                                     # Default is 2152
+                SCHED_PARAMS :
+                {
+                    #CPU_ID        = 2;
+                    # Values in { SCHED_OTHER, SCHED_IDLE, SCHED_BATCH, SCHED_FIFO, SCHED_RR }
+                    SCHED_POLICY   = "SCHED_FIFO";
+                    SCHED_PRIORITY = 98;
+                    POOL_SIZE      = 1;
+                };
+            };
+            SX :
+            {
+                # S/P-GW binded interface for SX communication
+                INTERFACE_NAME         = "{{ conf['nfInterfaces']['n4'] if 'nfInterfaces' in conf.keys() and 'n4' in conf['nfInterfaces'].keys() else 'eth0' }}";
+                IPV4_ADDRESS           = "read";
+                #PORT                   = 8805;                         # Default is 8805
+                SCHED_PARAMS :
+                {
+                    #CPU_ID        = 1;
+                    SCHED_POLICY   = "SCHED_FIFO";
+                    SCHED_PRIORITY = 88;
+                    POOL_SIZE      = 1;
+                };
+            };
+            SGI :
+            {
+               # No config to set, the software will set the SGi interface to the interface used for the default route.
+                INTERFACE_NAME         = "{{ conf['nfInterfaces']['n6'] if 'nfInterfaces' in conf.keys() and 'n6' in conf['nfInterfaces'].keys() else 'eth0' }}";
+                IPV4_ADDRESS           = "read";
+                SCHED_PARAMS :
+                {
+                    #CPU_ID        = 3;
+                    SCHED_POLICY   = "SCHED_FIFO";
+                    SCHED_PRIORITY = 99;
+                    POOL_SIZE      = 1;
+                };
+            };
+        };
+
+        # SNAT Values in {yes, no}
+        SNAT = "yes";
+
+        PDN_NETWORK_LIST  = (
+                          {NETWORK_IPV4 = "{{ conf['ipv4Subnet'] if 'ipv4Subnet' in conf.keys() else '12.1.1.0/24' }}";} # 1 ITEM SUPPORTED ONLY
+                        );
+
+        SPGW-C_LIST = (
+             {IPV4_ADDRESS="{{ conf['smfIpAddress'] }}" ;}
+        );
+
+        NON_STANDART_FEATURES :
+        {
+            # 'no' for standard features, yes for enhancing UL throughput
+            BYPASS_UL_PFCP_RULES = "no";
+        };
+
+        SUPPORT_5G_FEATURES:
+        {
+           # STRING, {"yes", "no"},
+           # Set to 'yes' to support 5G Features
+           ENABLE_5G_FEATURES = "yes";
+           # Set to 'yes' if UPF registers to an NRF
+           REGISTER_NRF       = "yes";
+           # Set to 'yes' if UPF relies on a DNS/FQDN service to resolve NRF's FQDN
+           USE_FQDN_NRF       = "yes";
+           # Set FQDN of UPF
+           UPF_FQDN_5G        = "{{ conf['service'] }}";
+
+           NRF :
+           {
+              IPV4_ADDRESS = "127.0.0.1";
+              # YOUR NRF CONFIG HERE (default: 80)
+              PORT         = 80;
+              # Set HTTP version for NRF (1 or 2). Default 1
+              HTTP_VERSION = 1;
+              # YOUR NRF API VERSION HERE. Default v1
+              API_VERSION  = "v1";
+              # Set FQDN of NRF
+              FQDN         = "{{ conf['fqdn']['nrf'] if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys() else 'oainrf' }}";
+           };
+
+           # Additional info to be sent to NRF for supporting Network Slicing
+           UPF_INFO = (
+              {
+                NSSAI_SST = {{ conf['nssai'][0]['sst'] }};
+                NSSAI_SD = "{{ conf['nssai'][0]['sd'] if "sd" in conf['nssai'][0].keys() else '0xFFFFFF' }}";
+                DNN_LIST = (
+                  {
+                    DNN = "{{ conf['nssai'][0]['dnn'] if "dnn" in conf['nssai'][0].keys() else 'default' }}";
+                  }
+                );
+              }
+              {% do conf['nssai'].pop(0) %}
+              {% for i in conf['nssai'] %}
+              ,{
+                NSSAI_SST = {{ i['sst'] }};
+                NSSAI_SD = "{{ i['sd'] if "sd" in i.keys() else '0xFFFFFF' }}";
+                DNN_LIST = (
+                  {
+                    DNN = "{{ i['dnn'] if "dnn" in i.keys() else 'default' }}";
+                  }
+                );
+              }
+              {% endfor %}
+           );
+        }
+    };
+
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oai-upf-controller
+  labels:
+    app.kubernetes.io/name: oai-upf-controller
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oai-upf-controller
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oai-upf-controller
+    spec:
+      securityContext:
+        runAsGroup: 0
+        runAsUser: 0
+      imagePullSecrets:
+      - name: regcred
+      containers:
+      - name: upf-controller
+        image: "oai-upf-controller:v1.5.1"
+        imagePullPolicy: IfNotPresent
+        env:
+          - name: 'NF_TYPE'
+            value: 'upf'
+          - name: 'DEPLOYMENT_FETCH_INTERVAL'
+            value: '1'
+          - name: 'DEPLOYMENT_FETCH_ITERATIONS'
+            value: '100'
+          - name: 'NF_CONF_PATH'
+            value: '/tmp/nf/upf.conf'
+          - name: 'OP_CONF_PATH'
+            value: '/tmp/op/upf.yaml'
+          - name: 'TESTING'
+            value: 'yes'
+        volumeMounts:
+          - mountPath: /tmp/op
+            name: opconf
+          - mountPath: /tmp/nf
+            name: nfconf
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "100m"
+        # livenessProbe:
+        #   httpGet:
+        #     path: /healthz
+        #     port: 8080
+        #   initialDelaySeconds: 2
+        #   periodSeconds: 5
+      volumes:
+      - configMap:
+          name: oai-upf-op-conf
+        name: opconf
+      - configMap:
+          name: oai-upf-nf-conf
+        name: nfconf
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      serviceAccountName: oai-upf-operator
+      terminationGracePeriodSeconds: 5
