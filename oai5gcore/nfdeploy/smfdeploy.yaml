@@ -1,3 +1,124 @@
+apiVersion: ref.nephio.org/v1alpha1
+kind: Config
+metadata:
+  name: smf-regional-upf-edge01
+  namespace: oaicp
+spec:
+  config:
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: UPFDeployment
+    metadata:
+      name: upf-edge01
+      namespace: oai-upf
+    spec:
+      capacity:
+        maxDownlinkThroughput: 5G
+        maxUplinkThroughput: 5G
+      interfaces:
+      - name: n3
+        ipv4:
+          address: 172.3.0.254/24
+          gateway: 172.3.0.1
+        vlanID: 4
+      - name: n4
+        ipv4:
+          address: 172.1.1.253/24
+          gateway: 172.1.1.1
+        vlanID: 2
+      - name: n6
+        ipv4:
+          address: 172.0.1.254/24
+          gateway: 172.0.1.1
+        vlanID: 3
+      networkInstances:
+      - name: vpc-internal
+        interfaces:
+        - n4
+      - name: vpc-internet
+        dataNetworks:
+        - name: internet
+          pool:
+          - prefix: 10.1.0.0/24
+        interfaces:
+        - n6
+      - name: vpc-ran
+        interfaces:
+        - n3
+---
+apiVersion: ref.nephio.org/v1alpha1
+kind: Config
+metadata:
+  name: smf-regional-upf-edge02
+  namespace: oaicp
+spec:
+  config:
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: UPFDeployment
+    metadata:
+      name: upf-edge02
+      namespace: oai-upf
+    spec:
+      capacity:
+        maxDownlinkThroughput: 5G
+        maxUplinkThroughput: 5G
+      interfaces:
+      - name: n3
+        ipv4:
+          address: 172.3.1.253/24
+          gateway: 172.3.1.1
+        vlanID: 4
+      - name: n4
+        ipv4:
+          address: 172.1.1.252/24
+          gateway: 172.1.1.1
+        vlanID: 2
+      - name: n6
+        ipv4:
+          address: 172.0.1.253/24
+          gateway: 172.0.1.1
+        vlanID: 3
+      networkInstances:
+      - name: vpc-internal
+        interfaces:
+        - n4
+      - name: vpc-internet
+        dataNetworks:
+        - name: oai
+          pool:
+          - prefix: 10.3.0.0/24
+        interfaces:
+        - n6
+      - name: vpc-ran
+        interfaces:
+        - n3
+---
+apiVersion: ref.nephio.org/v1alpha1
+kind: Config
+metadata:
+  name: smf-config
+  namespace: oaicp
+spec:
+  config:
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: SMFDeployment
+    metadata:
+      name: smf-config
+      namespace: oaicp
+    spec:
+      logLevel: info
+      image: 'docker.io/oaisoftwarealliance/oai-smf:develop'
+      nssai:
+        - sst: 1
+          sd: 'FFFFFF'
+      ueSettings:
+        primary: 8.8.8.8
+        secondary: 4.4.4.4
+        mtu: 1500
+      fqdn:
+        nrf: 'nrf-regional'
+        udm: 'udm-regional'
+        amf: 'amf-regional'
+---
 apiVersion: workload.nephio.org/v1alpha1
 kind: SMFDeployment
 metadata:
@@ -19,3 +140,16 @@ spec:
   - name: vpc-internal
     interfaces:
     - n4
+  configRefs:
+  - name: smf-config
+    namespace: oaicp
+    apiVersion: ref.nephio.org/v1alpha1
+    kind: Config
+  - name: smf-regional-upf-edge01
+    namespace: oaicp
+    apiVersion: ref.nephio.org/v1alpha1
+    kind: Config
+  - name: smf-regional-upf-edge02
+    namespace: oaicp
+    apiVersion: ref.nephio.org/v1alpha1
+    kind: Config

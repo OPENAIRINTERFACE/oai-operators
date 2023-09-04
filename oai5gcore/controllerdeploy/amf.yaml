@@ -35,6 +35,9 @@ rules:
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
+  - apiGroups: ["ref.nephio.org"]
+    resources: [configs,config]
+    verbs: [list, watch, update, patch, get]
   # - apiGroups: ["workload.nephio.org"]
   #   resources: [amfdeployments]
   #   verbs: [list, watch]
@@ -111,31 +114,20 @@ metadata:
   namespace: oaiops
 data:
   amf.yaml: |
-    plmn:
-      mcc: '001'
-      mnc: '01'
-      tac: '0x0001'
-    nssai:
-      - sst: 1
-        sd: '0xFFFFFF'
-      - sst: 1
-        sd: '0x1'
-    image: 'docker.io/oaisoftwarealliance/oai-amf:v1.5.1'
-    ports: 
-      - name: n2
-        port: 38412
-        protocol: SCTP
-      - name: http
-        port: 80
-        protocol: TCP
-    fqdn:
-      smf: 'smf-regional'
-      ausf: 'ausf-regional'
-      nrf: 'nrf-regional'
-      udm: 'udm-regional'      
+    nad: 
+      parent: 'eth1'
+      create: False
+    # these ports are here for creating the kube-svc should be same for the nf
     nfInterfaces:
       n2: 'n2'
       sbi: 'eth0'
+    ports:
+      - name: 'n2'
+        port: 38412
+        protocol: SCTP
+      - name: 'http'
+        port: 80
+        protocol: TCP
     compute:
       req:
         cpu: '100m'
@@ -150,134 +142,86 @@ metadata:
   name: oai-amf-nf-conf
   namespace: oaiops
 data:
-  amf.conf: |
-    AMF =
-    {
-      INSTANCE_ID = 0;            
-      PID_DIRECTORY = "/var/run";   
-
-      AMF_NAME = "OAI-AMF";
-      LOG_LEVEL = "{{ conf["logLevel"] if "logLevel" in conf.keys() else 'debug' }}";
-
-      RELATIVE_CAPACITY = 30;
-      # Display statistics about whole system (in seconds)
-      STATISTICS_TIMER_INTERVAL = 20;
-
-      CORE_CONFIGURATION:
-      {
-        EMERGENCY_SUPPORT = "false";
-      };
-
-      GUAMI:
-      {
-        MCC = "{{ conf['plmn']['mcc'] }}"; MNC = "{{ conf['plmn']['mnc'] }}"; RegionID = "128"; AMFSetID = "1"; AMFPointer = "1"
-      }
-
-      SERVED_GUAMI_LIST = (
-        {MCC = "{{ conf['plmn']['mcc'] }}"; MNC = "{{ conf['plmn']['mnc'] }}"; RegionID = "128"; AMFSetID = "1"; AMFPointer = "0"}
-      );
-
-      PLMN_SUPPORT_LIST = ({
-        MCC = "{{ conf['plmn']['mcc'] }}"; MNC = "{{ conf['plmn']['mnc'] }}"; TAC = {{ conf['plmn']['tac'] }};
-        SLICE_SUPPORT_LIST = (
-          {SST = {{ conf['nssai'][0]['sst'] }};SD = "{{ conf['nssai'][0]['sd'] }}"}
-          {% do conf['nssai'].pop(0) %}
-          {% for i in conf['nssai'] %}
-          ,{SST = {{ i["sst"] }};SD = "{{ i["sd"] if 'sd' in i.keys() else '0xFFFFFF' }}"}
-          {% endfor %}
-         )
-      });
-
-      INTERFACES:
-      {
-        # AMF binded interface for N1/N2 interface (NGAP)
-        NGAP_AMF:
-        {
-          INTERFACE_NAME = "{{ conf['nfInterfaces']['n2'] if 'nfInterfaces' in conf.keys() and 'n2' in conf['nfInterfaces'].keys() else 'eth0' }}";
-          IPV4_ADDRESS   = "read";
-          PORT           = 38412;
-          PPID           = 60;
-        };
-
-        # AMF binded interface for SBI (N11 (SMF)/N12 (AUSF), etc.)
-        SBI:
-        {
-          INTERFACE_NAME = "{{ conf['nfInterfaces']['sbi'] if 'nfInterfaces' in conf.keys() and 'sbi' in conf['nfInterfaces'].keys() else 'eth0' }}";
-          IPV4_ADDRESS   = "read";
-          PORT           = 80;
-          API_VERSION    = "v1";
-          HTTP2_PORT     = 8080;
-
-          SMF_INSTANCES_POOL = (
-            {SMF_INSTANCE_ID = 1; IPV4_ADDRESS = "127.0.0.1"; PORT = "80"; HTTP2_PORT = 8080, VERSION = "v1"; FQDN = "{{ conf['fqdn']['smf'] if 'fqdn' in conf.keys() and 'smf' in conf['fqdn'].keys() else 'oaismf' }}", SELECTED = "true"}
-          );
-        };
-
-        NRF :
-        {
-          IPV4_ADDRESS = "127.0.0.1";
-          PORT         = 80;            # default: 80
-          API_VERSION  = "v1";
-          FQDN         = "{{ conf['fqdn']['nrf'] if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys() else 'oai-nrf' }}"
-        };
-
-        AUSF :
-        {
-          IPV4_ADDRESS = "127.0.0.1";
-          PORT         = 80;            # default: 80
-          API_VERSION  = "v1";
-          FQDN         = "{{ conf['fqdn']['ausf'] if 'fqdn' in conf.keys() and 'ausf' in conf['fqdn'].keys() else 'oai-ausf' }}"
-        };
-
-        UDM :
-        {
-          IPV4_ADDRESS = "127.0.0.1";
-          PORT         = 80;    # default: 80
-          API_VERSION  = "v2";
-          FQDN         = "{{ conf['fqdn']['udm'] if 'fqdn' in conf.keys() and 'udm' in conf['fqdn'].keys() else 'oai-udm' }}"
-        };
-
-        NSSF :
-        {
-          IPV4_ADDRESS = "127.0.0.1";
-          PORT         = 80;            # default: 80
-          API_VERSION  = "v2";
-          FQDN         = "localhost"
-        };
-
-      };
-
-      SUPPORT_FEATURES:
-      {
-         # STRING, {"yes", "no"},
-         NF_REGISTRATION = "yes";  # Set to yes if AMF registers to an NRF
-         NRF_SELECTION   = "no";    # Set to yes to enable NRF discovery and selection
-         EXTERNAL_NRF    = "no";     # Set to yes if AMF works with an external NRF
-         SMF_SELECTION   = "{{ conf['options']['smf_selection'] if 'options' in conf.keys() and 'smf_selection' in conf['options'].keys() else 'no' }}";    # Set to yes to enable SMF discovery and selection
-         EXTERNAL_AUSF   = "yes";    # Set to yes if AMF works with an external AUSF
-         EXTERNAL_UDM    = "{{ conf['options']['external_udm'] if 'options' in conf.keys() and 'external_udm' in conf['options'].keys() else 'no' }}";     # Set to yes if AMF works with an external UDM
-         EXTERNAL_NSSF   = "no";    # Set to yes if AMF works with an external NSSF
-         USE_FQDN_DNS    = "yes";   # Set to yes if AMF relies on a DNS to resolve NRF/SMF/UDM/AUSF's FQDN
-         USE_HTTP2       = "no";        # Set to yes to enable HTTP2 for AMF server
-      }
-
-      AUTHENTICATION:
-      {
-        ## MySQL mandatory options
-        MYSQL_server = "mysql"; # MySQL Server address
-        MYSQL_user   = "test";   # Database server login
-        MYSQL_pass   = "test";   # Database server password
-        MYSQL_db     = "oai_db";     # Your database name
-        RANDOM = "true";
-      };
-
-      NAS:
-      {
-        ORDERED_SUPPORTED_INTEGRITY_ALGORITHM_LIST = [ "NIA1" , "NIA1" , "NIA2" ];
-        ORDERED_SUPPORTED_CIPHERING_ALGORITHM_LIST = [ "NEA0" , "NEA1" , "NEA2" ];
-      };
-
-    };
+  amf.yaml: |
+    log_level:
+      general: {{ conf['logLevel'] }}
+    # If you enable registration, the other NFs will use the NRF discovery mechanism
+    register_nf:
+      general: yes
+    http_version: 2
+    ## general single_nssai configuration
+    ## Defines YAML anchors, which are reused in the config file
+    snssais:
+      {%- for i in conf['nssai'] %}
+      - &slice_{{ conf['nssai'].index(i) }}
+        sst: {{ i['sst'] }}
+        sd: {{ i['sd'] if 'sd' in i.keys() else 'FFFFFF' }}
+      {%- endfor %}
+    ############## SBI Interfaces
+    nfs:
+      amf:
+        host: {{ conf['fqdn']['amf'] }}  #will be replaced by service name
+        sbi:
+          port: 80
+          api_version: v1
+          interface_name: {{ conf['nfInterfaces']['sbi'] }}
+        n2:
+          interface_name: {{ conf['nfInterfaces']['n2'] }}
+          port: 38412
+      smf:
+        host: {{ conf['fqdn']['smf'] }}
+        sbi:
+          port: 80
+          api_version: v1
+      udm:
+        host: {{ conf['fqdn']['udm'] }}
+        sbi:
+          port: 80
+          api_version: v1
+      ausf:
+        host: {{ conf['fqdn']['ausf'] }}
+        sbi:
+          port: 80
+          api_version: v1
+      nrf:
+        host: {{ conf['fqdn']['nrf'] }}
+        sbi:
+          port: 80
+          api_version: v1
+    ############## NF-specific configuration
+    amf:
+      amf_name: "OAI-AMF"
+      # This really depends on if we want to keep the "mini" version or not
+      support_features_options:
+        enable_simple_scenario: no # "no" by default with the normal deployment scenarios with AMF/SMF/UPF/AUSF/UDM/UDR/NRF.
+                                   # set it to "yes" to use with the minimalist deployment scenario (including only AMF/SMF/UPF) by using the internal AUSF/UDM implemented inside AMF.
+                                   # There's no NRF in this scenario, SMF info is taken from "nfs" section.
+        enable_nssf: no
+        enable_smf_selection: yes
+      relative_capacity: 30
+      statistics_timer_interval: 20  # in seconds
+      emergency_support: false
+      served_guami_list:
+        - mcc: {{ conf['plmn']['mcc'] }}
+          mnc: {{ conf['plmn']['mnc'] }}
+          amf_region_id: 01
+          amf_set_id: 001
+          amf_pointer: 01
+      plmn_support_list:
+        - mcc: {{ conf['plmn']['mcc'] }}
+          mnc: {{ conf['plmn']['mnc'] }}
+          tac: {{ conf['plmn']['tac'] }}
+          nssai:
+            {%- for i in conf['nssai'] %}
+            - *slice_{{ conf['nssai'].index(i) }}
+            {%- endfor %}
+      supported_integrity_algorithms:
+        - "NIA1"
+        - "NIA2"
+      supported_encryption_algorithms:
+        - "NEA0"
+        - "NEA1"
+        - "NEA2"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -298,26 +242,15 @@ spec:
       labels:
         app.kubernetes.io/name: oai-amf
     spec:
-      # securityContext:
-      #   runAsGroup: 0
-      #   runAsUser: 0
-      imagePullSecrets:
-      - name: regcred
+      securityContext:
+        runAsGroup: 0
+        runAsUser: 0
+      # imagePullSecrets:
+      # - name: regcred
       containers:
       - name: amf-controller
-        image: "docker.io/arorasagar/oai-amf-controller:v1.5.1"
-        imagePullPolicy: Always
-        command:
-        - 'kopf'
-        - 'run' 
-        - '/root/.local/controller.py'
-        - '--all-namespaces'
-        - '--liveness=http://0.0.0.0:8080/healthz'
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
+        image: "hydrogen.local/oai-amf-controller:develop"
+        imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'
             value: 'amf'
@@ -326,9 +259,13 @@ spec:
           - name: 'DEPLOYMENT_FETCH_ITERATIONS'
             value: '100'
           - name: 'NF_CONF_PATH'
-            value: '/tmp/nf/amf.conf'
+            value: '/tmp/nf/amf.yaml'
           - name: 'OP_CONF_PATH'
             value: '/tmp/op/amf.yaml'
+          - name: 'TESTING'
+            value: 'no'
+          - name: 'KUBERNETES_BASE_URL'
+            value: 'https://kubernetes.default.svc'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf
@@ -336,23 +273,17 @@ spec:
             name: nfconf
         resources:
           requests:
-            memory: "128Mi"
-            cpu: "50m"
+            memory: "256Mi"
+            cpu: "100m"
           limits:
-            memory: "250Mi"
-            cpu: "300m"
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8080
-          initialDelaySeconds: 60
-          periodSeconds: 30
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 30
+            memory: "256Mi"
+            cpu: "100m"
+        # livenessProbe:
+        #   httpGet:
+        #     path: /healthz
+        #     port: 8080
+        #   initialDelaySeconds: 2
+        #   periodSeconds: 5
       volumes:
       - configMap:
           name: oai-amf-op-conf
@@ -363,5 +294,4 @@ spec:
       dnsPolicy: ClusterFirst
       restartPolicy: Always
       serviceAccountName: oai-amf-operator
-      automountServiceAccountToken: true
       terminationGracePeriodSeconds: 5

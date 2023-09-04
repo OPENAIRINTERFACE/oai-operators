@@ -1,7 +1,30 @@
+apiVersion: ref.nephio.org/v1alpha1
+kind: Config
+metadata:
+  name: udm-config
+  namespace: oaicp
+spec:
+  config:
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: UDMDeployment
+    metadata:
+      name: udm-config
+      namespace: oaicp
+    spec:
+      logLevel: info
+      image: 'docker.io/oaisoftwarealliance/oai-udm:develop'
+      fqdn:
+        nrf: nrf-regional
+        udr: udr-regional
+---
 apiVersion: workload.nephio.org/v1alpha1
 kind: UDMDeployment
 metadata:
   name: udm-regional
-  namespace: oaicp  
+  namespace: oaicp
 spec:
   configRefs:
+  - name: udm-config
+    namespace: oaicp
+    apiVersion: ref.nephio.org/v1alpha1
+    kind: Config

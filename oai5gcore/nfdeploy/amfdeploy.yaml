@@ -1,3 +1,31 @@
+apiVersion: ref.nephio.org/v1alpha1
+kind: Config
+metadata:
+  name: amf-config
+  namespace: oaicp
+spec:
+  config:
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: AMFDeployment
+    metadata:
+      name: amf-config
+      namespace: oaicp
+    spec:
+      logLevel: info
+      plmn:
+        mcc: '001'
+        mnc: '01'
+        tac: '0x0001'
+      nssai:
+        - sst: 1
+          sd: 'FFFFFF'
+      image: 'docker.io/oaisoftwarealliance/oai-amf:develop'
+      fqdn:
+        smf: 'smf-regional'
+        ausf: 'ausf-regional'
+        nrf: 'nrf-regional'
+        udm: 'udm-regional'
+---
 apiVersion: workload.nephio.org/v1alpha1
 kind: AMFDeployment
 metadata:
@@ -6,7 +34,7 @@ metadata:
 spec:
   capacity:
     maxDownlinkThroughput: "0"
-    maxSubscribers: 10000
+    maxSubscribers: 64
     maxUplinkThroughput: "0"
   interfaces:
   - name: n2
@@ -18,3 +46,8 @@ spec:
   - name: vpc-ran
     interfaces:
     - n2
+  configRefs:
+  - name: amf-config
+    namespace: oaicp
+    apiVersion: ref.nephio.org/v1alpha1
+    kind: Config

@@ -38,6 +38,9 @@ rules:
   # - apiGroups: ["workload.nephio.org"]
   #   resources: [nrfdeployments]
   #   verbs: [list, watch]
+  - apiGroups: ["ref.nephio.org"]
+    resources: [configs,config]
+    verbs: [list, watch, update, patch, get]
   - apiGroups: ["workload.nephio.org"]
     resources: [nrfdeployments,nrfdeployments/status]
     verbs: [list, watch, update, patch]
@@ -110,8 +113,9 @@ metadata:
   name: oai-nrf-op-conf
 data:
   nrf.yaml: |
-    image: 'docker.io/oaisoftwarealliance/oai-nrf:v1.5.1'
-    ports: 
+    nfInterfaces:
+      sbi: 'eth0'
+    ports:
       - name: 'http'
         port: 80
         protocol: TCP
@@ -128,27 +132,24 @@ kind: ConfigMap
 metadata:
   name: oai-nrf-nf-conf
 data:
-  nrf.conf: |
-    NRF =
-    {
-        # 0 is the default
-        INSTANCE      = 0;
-        # /var/run is the default
-        PID_DIRECTORY = "/var/run";
-        LOG_LEVEL = "{{ conf["logLevel"] if "logLevel" in conf.keys() else 'debug' }}";
-
-        SBI_INTERFACE :
-        {
-            # NRF binded interface for SBI interface (e.g., communication with other NFs e.g., AMF, SMF, UDM)
-            INTERFACE_NAME = "{{ conf['nfInterfaces']['sbi'] if 'nfInterfaces' in conf.keys() and 'sbi' in conf['nfInterfaces'].keys() else 'eth0' }}";
-            IPV4_ADDRESS   = "read";
-            PORT           = 80;
-            HTTP2_PORT     = 8080;
-            API_VERSION    = "v1";
-        };                 
-       
-    };
-
+  nrf.yaml: |
+    ############# Common configuration
+    # Log level
+    log_level:
+      general: {{ conf['logLevel'] }}
+    http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
+    ############## SBI Interfaces
+    ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
+    nfs:
+      nrf:
+        host: {{ conf['fqdn']['nrf'] }}
+        sbi:
+          port: 80
+          api_version: v1
+          interface_name: {{ conf['nfInterfaces']['sbi'] }}
+    ############## NF-specific configuration
+    nrf:
+      nrf_name: "OAI-NRF"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -175,7 +176,7 @@ spec:
       - name: regcred
       containers:
       - name: nrf-controller
-        image: "oai-nrf-controller:v1.5.1"
+        image: "oai-nrf-controller:develop"
         imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'
@@ -185,9 +186,11 @@ spec:
           - name: 'DEPLOYMENT_FETCH_ITERATIONS'
             value: '100'
           - name: 'NF_CONF_PATH'
-            value: '/tmp/nf/nrf.conf'
+            value: '/tmp/nf/nrf.yaml'
           - name: 'OP_CONF_PATH'
             value: '/tmp/op/nrf.yaml'
+          - name: 'KUBERNETES_BASE_URL'
+            value: 'http://kubernetes.default.svc'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf

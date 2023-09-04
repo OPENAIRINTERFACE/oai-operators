@@ -38,6 +38,9 @@ rules:
   # - apiGroups: ["workload.nephio.org"]
   #   resources: [udrdeployments]
   #   verbs: [list, watch]
+  - apiGroups: ["ref.nephio.org"]
+    resources: [configs,config]
+    verbs: [list, watch, update, patch, get]
   - apiGroups: ["workload.nephio.org"]
     resources: [udrdeployments,udrdeployments/status]
     verbs: [list, watch, update, patch]
@@ -110,15 +113,12 @@ metadata:
   name: oai-udr-op-conf
 data:
   udr.yaml: |
-    image: 'docker.io/oaisoftwarealliance/oai-udr:v1.5.1'
-    imagePullSecrets:
-      - name: test
-    database:
-      server: mysql
-    ports: 
+    ports:
       - name: 'http'
         port: 80
         protocol: TCP
+    nfInterfaces:
+      sbi: 'eth0'
     compute:
       req:
         cpu: '100m'
@@ -132,62 +132,39 @@ kind: ConfigMap
 metadata:
   name: oai-udr-nf-conf
 data:
-  udr.conf: |
-    UDR =
-    {
-      # 0 is the default
-      INSTANCE_ID   = 0;
-      # /var/run is the default
-      PID_DIRECTORY = "/var/run";
-      UDR_NAME      = "oai-udr";
-      LOG_LEVEL = "{{ conf["logLevel"] if "logLevel" in conf.keys() else 'debug' }}";
-
-      SUPPORT_FEATURES:{
-        # Set to yes if UDR will relying on a DNS to resolve UDM's FQDN
-        USE_FQDN_DNS = "no";
-        # Set to yes if UDR resgisters to an NRF
-        REGISTER_NRF = "no";
-        # Set to yes to enable HTTP2 for UDR server
-        USE_HTTP2    = "no";
-        # Set to 'MySQL'/'Cassandra' to use MySQL/Cassandra
-        DATABASE     = "MySQL";
-      };
-
-      INTERFACES:
-      {
-        # NUDR Interface (SBI)
-        NUDR:
-        {
-          INTERFACE_NAME = "{{ conf['nfInterfaces']['sbi'] if 'nfInterfaces' in conf.keys() and 'sbi' in conf['nfInterfaces'].keys() else 'eth0' }}";
-          IPV4_ADDRESS   = "read";
-          # Default value: 80
-          PORT           = 80;
-          HTTP2_PORT     = 8080;
-          API_VERSION    = "v1";
-        };
-      };
-
-      NRF:
-      {
-        IPV4_ADDRESS = "127.0.0.1";
-        # YOUR NRF CONFIG HERE (default: 80)
-        PORT         = 80;
-        # YOUR NRF API VERSION HERE
-        API_VERSION  = "v1";
-        FQDN         = "{{ conf['fqdn']['nrf'] if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys() else 'oai-nrf' }}";
-      };
-
-      MYSQL:
-      {
-        # MySQL Server address
-        MYSQL_SERVER = "{{ conf['database']['server'] if "server" in conf['database'].keys() else 'mysql' }}";
-        MYSQL_USER   = "{{ conf['database']['user'] if "user" in conf['database'].keys() else 'test' }}";   # Database server login
-        MYSQL_PASS   = "{{ conf['database']['password'] if "password" in conf['database'].keys() else 'test' }}";   # Database server password
-        MYSQL_DB     = "{{ conf['database']['dbName'] if "dbName" in conf['database'].keys() else 'oai_db' }}";     # Your database name
-        # Reset the connection to the DB after expiring the timeout (in second)
-        DB_CONNECTION_TIMEOUT = {{ conf['database']['dbName'] if "dbName" in conf['database'].keys() else '300' }};
-      };
-    };
+  udr.yaml: |
+    # Log level
+    log_level:
+      general: {{ conf['logLevel'] }}
+    # If you enable registration, the NF will use the NRF discovery mechanism
+    register_nf:
+      general: yes
+    http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
+    ############## SBI Interfaces
+    ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
+    nfs:
+      udr:
+        host: {{ conf['fqdn']['udr'] }}
+        sbi:
+          port: 80
+          api_version: v1
+          interface_name: {{ conf['nfInterfaces']['sbi'] }}
+      nrf:
+        host: {{ conf['fqdn']['nrf'] }}
+        sbi:
+          port: 80
+          api_version: v1
+    ############## NF-specific configuration
+    udr:
+      udr_name: "OAI-UDR"
+    database:
+      host: {{ conf['database']['host'] }}
+      user: {{ conf['database']['user'] }}
+      type: {{ conf['database']['type'] }}
+      password: {{ conf['database']['pass'] }}
+      database_name: oai_db
+      generate_random: true
+      connection_timeout: {{ conf['database']['connection_timeout'] }} # seconds
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -210,11 +187,11 @@ spec:
       securityContext:
         runAsGroup: 0
         runAsUser: 0
-      imagePullSecrets:
-      - name: regcred
+      # imagePullSecrets:
+      # - name: regcred
       containers:
       - name: udr-controller
-        image: "oai-udr-controller:v1.5.1"
+        image: "oai-udr-controller:develop"
         imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'
@@ -224,11 +201,13 @@ spec:
           - name: 'DEPLOYMENT_FETCH_ITERATIONS'
             value: '100'
           - name: 'NF_CONF_PATH'
-            value: '/tmp/nf/udr.conf'
+            value: '/tmp/nf/udr.yaml'
           - name: 'OP_CONF_PATH'
             value: '/tmp/op/udr.yaml'
           - name: 'TESTING'
             value: 'yes'
+          - name: 'KUBERNETES_BASE_URL'
+            value: 'http://kubernetes.default.svc'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf

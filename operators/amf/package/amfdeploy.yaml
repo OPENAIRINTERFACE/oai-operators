@@ -1,3 +1,32 @@
+apiVersion: ref.nephio.org/v1alpha1
+kind: Config
+metadata:
+  name: amf-config
+spec:
+  config:
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: AMFDeployment
+    metadata:
+      name: amf-config
+      namespace: default
+    spec:
+      logLevel: info
+      plmn:
+        mcc: '001'
+        mnc: '01'
+        tac: '0x0001'
+      nssai:
+        - sst: 1
+          sd: 'FFFFFF'
+        - sst: 1
+          sd: '000001'
+      image: 'docker.io/oaisoftwarealliance/oai-amf:develop'
+      fqdn:
+        smf: 'oai-smf'
+        ausf: 'oai-ausf'
+        nrf: 'oai-nrf'
+        udm: 'oai-udm'
+---
 apiVersion: workload.nephio.org/v1alpha1
 kind: AMFDeployment
 metadata:
@@ -15,3 +44,7 @@ spec:
     interfaces:
     - n2
   configRefs:
+  - name: amf-config
+    namespace: default
+    apiVersion: ref.nephio.org/v1alpha1
+    kind: Config

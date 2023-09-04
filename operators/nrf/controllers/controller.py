@@ -49,7 +49,6 @@ def configure(settings: kopf.OperatorSettings, **_):
 def create_fn(spec, namespace, logger, patch, **kwargs):
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     nf_resources = conf['compute']
-    nf_ports = conf['ports']
     conf.update({
                 'maxSubscribers': spec.get('maxSubscribers',1000),
                 'interfaces': spec.get('interfaces'),
@@ -57,6 +56,20 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                 })
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
+
+    for config_ref in spec.get('configRefs'):
+        _temp = get_config_ref(name=config_ref['name'],namespace=config_ref['namespace'],logger=logger)
+        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()) and (_temp['output']['spec']['config']['kind'] == 'NRFDeployment'):
+            conf.update(_temp['output']['spec']['config']['spec'])
+
+    nf_ports = conf['ports']
+    svc_status = create_svc(name=kwargs['body']['metadata']['name'], 
+                          namespace=namespace,
+                          labels=LABEL,
+                          logger=logger,
+                          ports=nf_ports,
+                          kopf=kopf)
+    conf.update({'fqdn':{f"{NF_TYPE}":svc_status['name']}}) ## the svc name of the nf is an input for nf configuration
 
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
@@ -87,13 +100,6 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                           namespace=namespace,
                           labels=LABEL,
                           logger=logger,
-                          kopf=kopf)
-
-    svc_status = create_svc(name=kwargs['body']['metadata']['name'], 
-                          namespace=namespace,
-                          labels=LABEL,
-                          logger=logger,
-                          ports=nf_ports,
                           kopf=kopf)
 
     deployment = create_deployment(name=kwargs['body']['metadata']['name'],
@@ -141,17 +147,38 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                 'networkInstances': spec.get('networkInstances')
                 })
     nf_resources = conf['compute']
-    nf_ports = conf['ports']
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
 
+    for config_ref in spec.get('configRefs'):
+        _temp = get_config_ref(name=config_ref['name'],namespace=config_ref['namespace'],logger=logger)
+        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()) and (_temp['output']['spec']['config']['kind'] == 'NRFDeployment'):
+            conf.update(_temp['output']['spec']['config']['spec'])
+    nf_ports = conf['ports']
+    #fetch the current svc and declaring kubernetes api object
+    try:
+        api = kubernetes.client.CoreV1Api()
+        obj = api.read_namespaced_service(
+            namespace=namespace,
+            name=kwargs['body']['metadata']['name']
+            ).to_dict()
+        svc_status = obj['metadata']
+    except ApiException as e:
+        if e.status == 404:
+            svc_status = create_svc(name=kwargs['body']['metadata']['name'], 
+                                  namespace=namespace,
+                                  labels=LABEL,
+                                  logger=logger,
+                                  ports=nf_ports,
+                                  kopf=kopf)
+    conf.update({'fqdn':{f"{NF_TYPE}":svc_status['name']}}) ## the svc name of the nf is an input for nf configuration
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
     jinja_template = env.get_template(os.path.basename(NF_CONF_PATH))
     configuration = jinja_template.render(conf=conf)
 
+    #fetch the config map(s)
     try:
-        api = kubernetes.client.CoreV1Api()
         obj = api.read_namespaced_config_map(
             namespace=namespace,
             name=kwargs['body']['metadata']['name']
@@ -182,21 +209,6 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                                   logger=logger,
                                   kopf=kopf)
             sa_name = sa_status['name']
-
-    #fetch the current svc
-    try:
-        obj = api.read_namespaced_service(
-            namespace=namespace,
-            name=kwargs['body']['metadata']['name']
-            ).to_dict()
-    except ApiException as e:
-        if e.status == 404:
-            svc_status = create_svc(name=kwargs['body']['metadata']['name'], 
-                                  namespace=namespace,
-                                  labels=LABEL,
-                                  logger=logger,
-                                  ports=nf_ports,
-                                  kopf=kopf)
 
     #fetch the current deployment
     try:
@@ -344,9 +356,31 @@ def update_fn(spec, namespace, logger, patch, **kwargs):
                 'networkInstances': spec.get('networkInstances')
                 })
     nf_resources = conf['compute']
-    nf_ports = conf['ports']
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
+
+    for config_ref in spec.get('configRefs'):
+        _temp = get_config_ref(name=config_ref['name'],namespace=config_ref['namespace'],logger=logger)
+        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()) and (_temp['output']['spec']['config']['kind'] == 'NRFDeployment'):
+            conf.update(_temp['output']['spec']['config']['spec'])
+    nf_ports = conf['ports']
+    #fetch the current svc and declaring kubernetes api object
+    try:
+        api = kubernetes.client.CoreV1Api()
+        obj = api.read_namespaced_service(
+            namespace=namespace,
+            name=kwargs['body']['metadata']['name']
+            ).to_dict()
+        svc_status = obj['metadata']
+    except ApiException as e:
+        if e.status == 404:
+            svc_status = create_svc(name=kwargs['body']['metadata']['name'], 
+                                  namespace=namespace,
+                                  labels=LABEL,
+                                  logger=logger,
+                                  ports=nf_ports,
+                                  kopf=kopf)
+    conf.update({'fqdn':{f"{NF_TYPE}":svc_status['name']}}) ## the svc name of the nf is an input for nf configuration
 
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
