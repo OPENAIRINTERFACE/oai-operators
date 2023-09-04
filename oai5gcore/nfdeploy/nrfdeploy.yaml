@@ -1,3 +1,19 @@
+apiVersion: ref.nephio.org/v1alpha1
+kind: Config
+metadata:
+  name: nrf-config
+  namespace: oaicp
+spec:
+  config:
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NRFDeployment
+    metadata:
+      name: nrf-config
+      namespace: oaicp
+    spec:
+      logLevel: info
+      image: 'docker.io/oaisoftwarealliance/oai-nrf:develop'
+---
 apiVersion: workload.nephio.org/v1alpha1
 kind: NRFDeployment
 metadata:
@@ -5,3 +21,7 @@ metadata:
   namespace: oaicp
 spec:
   configRefs:
+  - name: nrf-config
+    namespace: oaicp
+    apiVersion: ref.nephio.org/v1alpha1
+    kind: Config

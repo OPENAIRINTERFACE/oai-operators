@@ -31,19 +31,25 @@ import requests
 requests.packages.urllib3.disable_warnings() 
 
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-HTTPS_VERIFY = bool(os.getenv('HTTPS_VERIFY',False)) ## To verfiy HTTPs certificates when communicating with cluster
 TOKEN=os.popen('cat /var/run/secrets/kubernetes.io/serviceaccount/token').read() ## Token used to communicate with Kube cluster
 NF_TYPE=str(os.getenv('NF_TYPE','smf'))      ## Network function name
 LABEL={'workload.nephio.org/oai': f"{NF_TYPE}"}   ## Labels to put inside the owned resources
 OP_CONF_PATH=str(os.getenv('OP_CONF_PATH',f"/tmp/op/{NF_TYPE}.yaml"))  ## Operators configuration file
-NF_CONF_PATH = str(os.getenv('NF_CONF_PATH',f"/tmp/nf/{NF_TYPE}.conf"))  ## Network function configuration file
+NF_CONF_PATH = str(os.getenv('NF_CONF_PATH',f"/tmp/nf/{NF_TYPE}.yaml"))  ## Network function configuration file
 DEPLOYMENT_FETCH_INTERVAL=int(os.getenv('DEPLOYMENT_FETCH_INTERVAL',1)) # Fetch the status of deployment every x seconds
 DEPLOYMENT_FETCH_ITERATIONS=int(os.getenv('DEPLOYMENT_FETCH_ITERATIONS',100))  # Number of times to fetch the deployment
 LOG_LEVEL = str(os.getenv('LOG_LEVEL','INFO'))    ## Log level of the controller
 TESTING = str(os.getenv('TESTING','yes'))    ## If testing the network function, it will remove the init container which checks for NRFs availability
+HTTPS_VERIFY = bool(os.getenv('HTTPS_VERIFY',False)) ## To verfiy HTTPs certificates when communicating with cluster
+TOKEN=os.popen('cat /var/run/secrets/kubernetes.io/serviceaccount/token').read() ## Token used to communicate with Kube cluster
+KUBERNETES_BASE_URL = str(os.getenv('KUBERNETES_BASE_URL','http://127.0.0.1:8080'))
+LOADBALANCER_IP = str(os.getenv('LOADBALANCER_IP',None))
+SVC_TYPE = str(os.getenv('SVC_TYPE','ClusterIP')) 
 
-
-
+if SVC_TYPE not in ['ClusterIP', 'LoadBalancer', 'NodePort']:
+    print(f"SVC_TYPE is case sensitive are you spelling {SVC_TYPE} correct?")
+    sys.exit('-1')
+    
 def create_deployment(name: str=None, 
                     namespace: str=None, 
                     compute: dict=None, 
@@ -105,7 +111,7 @@ def create_deployment(name: str=None,
             )
     if nrf_svc is None:
         nrf_svc = "oai-nrf" #default value
-    URL = f"curl --head -X GET http://{nrf_svc}/nnrf-nfm/v1/nf-instances?nf-type='NRF'"
+    URL = f"curl --connect-timeout 1 --head -X GET http://{nrf_svc}/nnrf-nfm/v1/nf-instances?nf-type='NRF' --http2-prior-knowledge"
     deployment = {
                   "apiVersion": "apps/v1",
                   "kind": "Deployment",
@@ -139,7 +145,7 @@ def create_deployment(name: str=None,
                             "command": [
                             'sh', 
                             '-c', 
-                            f"until {URL}; do echo waiting for oai-nrf; sleep 2; done"
+                            f"until {URL}; do echo waiting for oai-nrf; sleep 1; done"
                             ]
                         }],
                         "containers": [
@@ -166,7 +172,7 @@ def create_deployment(name: str=None,
                             "command": [
                               f"/openair-{nf_type}/bin/oai_{nf_type}",
                               "-c",
-                              f"/openair-{nf_type}/etc/{nf_type}.conf",
+                              f"/openair-{nf_type}/etc/{nf_type}.yaml",
                               "-o"
                             ]
                           }
@@ -339,7 +345,7 @@ def create_config_map(name: str=None, namespace: str=None,
     configmap = kubernetes.client.V1ConfigMap(
         api_version="v1",
         kind="ConfigMap",
-        data={f"{nf_type}.conf":configuration},
+        data={f"{nf_type}.yaml":configuration},
         metadata=metadata
     )
     kopf.adopt(configmap)  # includes namespace, name, existing labels
@@ -459,6 +465,7 @@ def create_svc(name: str=None,
             }
             )
 
+    # SVC_TYPE (LoadBalancer,ClusterIP,NodePort)
     svc = {
           "apiVersion": "v1",
           "kind": "Service",
@@ -467,17 +474,20 @@ def create_svc(name: str=None,
             "labels": labels
           },
           "spec": {
-            "type": "ClusterIP",
+            "type": SVC_TYPE,
             "clusterIP": "None",
             "ports": _ports,
             "selector": labels
           }
         }
+    if LOADBALANCER_IP is not None:
+        svc['spec'].update({'loadBalancerIP':LOADBALANCER_IP})
+    if SVC_TYPE in ['LoadBalancer','NodePort']:
+        svc['spec'].pop('clusterIP')
 
     kopf.adopt(svc)  # includes namespace, name, existing labels
     kopf.label(svc, labels, nested=['spec.template'])
     creation_timestamp =  None
-    print(svc)
     try:
         api = kubernetes.client.CoreV1Api()
         obj = api.create_namespaced_service(
@@ -515,7 +525,7 @@ def create_nad(name: str=None, namespace: str=None,
         "Accept": "application/json",
         "Authorization": "Bearer {}".format(TOKEN)}
     try:
-        r = requests.get(f"https://kubernetes.default.svc/apis/k8s.cni.cncf.io/v1/namespaces/{namespace}/network-attachment-definitions/{name}", headers=headers, verify=HTTPS_VERIFY)
+        r = requests.get(f"{KUBERNETES_BASE_URL}/apis/k8s.cni.cncf.io/v1/namespaces/{namespace}/network-attachment-definitions/{name}", headers=headers, verify=HTTPS_VERIFY)
     except Exception as e:
         return {'status' :False,'reason':'NotAbleToCommunicateWithTheCluster'}
     if r.status_code in [200]:
@@ -559,7 +569,7 @@ def create_nad(name: str=None, namespace: str=None,
                         }
                  }
         logger.debug(f"network-attachment-definition {name} does not exist in namespace {namespace} operator is creating it now")
-        r = requests.post(f"https://kubernetes.default.svc/apis/k8s.cni.cncf.io/v1/namespaces/{namespace}/network-attachment-definitions", headers=headers, json=nad, verify=HTTPS_VERIFY)
+        r = requests.post(f"{KUBERNETES_BASE_URL}/apis/k8s.cni.cncf.io/v1/namespaces/{namespace}/network-attachment-definitions", headers=headers, json=nad, verify=HTTPS_VERIFY)
         logger.debug("Response of the request to create nad %s response %s" %(r.request.url, r.json()))                   
         if r.status_code in [200,201]:
             Response = {'status': True,'name':name}
@@ -587,7 +597,7 @@ def delete_nad(name: str=None, namespace: str=None,
     headers = {"Content-type": "application/json",
         "Accept": "application/json",
         "Authorization": "Bearer {}".format(TOKEN)}
-    r = requests.delete(f"https://kubernetes.default.svc/apis/k8s.cni.cncf.io/v1/namespaces/{namespace}/network-attachment-definitions/{name}", headers=headers, verify=HTTPS_VERIFY)
+    r = requests.delete(f"{KUBERNETES_BASE_URL}/apis/k8s.cni.cncf.io/v1/namespaces/{namespace}/network-attachment-definitions/{name}", headers=headers, verify=HTTPS_VERIFY)
     logger.debug("Response of the request to delete nad %s response %s" %(r.request.url, r.json()))
     if r.status_code in [200,202,204]:
         Response = {'status': True,'name':name}
@@ -596,6 +606,35 @@ def delete_nad(name: str=None, namespace: str=None,
     elif r.status_code == 404:
         Response ={'status': False,'reason':'notFound'}        
     else: 
+        Response = {'status':False,'reason':r.json()}
+
+    return Response
+
+def get_config_ref(name: str=None, namespace: str=None,
+              logger=None):
+    '''
+    :param name: name of the configmap
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :param kopf: Instance of kopf
+    :return: status
+    :rtype: Boolean
+    '''
+    headers = {"Content-type": "application/json",
+        "Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r = requests.get(f"{KUBERNETES_BASE_URL}/apis/ref.nephio.org/v1alpha1/namespaces/{namespace}/configs/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug("Response of request to fetch config.req %s response %s" %(r.request.url, r.json()))
+    if r.status_code==200:
+        Response = {'status': True,'output':r.json()}
+    elif r.status_code in [401,403]:
+        Response = {'status' :False,'reason':'unauthorized'}
+    elif r.status_code == 404:
+        Response ={'status': False,'reason':'notFound'}
+    else:
         Response = {'status':False,'reason':r.json()}
 
     return Response

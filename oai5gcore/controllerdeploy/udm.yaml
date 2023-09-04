@@ -38,6 +38,9 @@ rules:
   # - apiGroups: ["workload.nephio.org"]
   #   resources: [udmdeployments]
   #   verbs: [list, watch]
+  - apiGroups: ["ref.nephio.org"]
+    resources: [configs,config]
+    verbs: [list, watch, update, patch, get]
   - apiGroups: ["workload.nephio.org"]
     resources: [udmdeployments,udmdeployments/status]
     verbs: [list, watch, update, patch]
@@ -111,14 +114,12 @@ metadata:
   namespace: oaiops
 data:
   udm.yaml: |
-    image: 'docker.io/oaisoftwarealliance/oai-udm:v1.5.1'
     ports: 
       - name: 'http'
         port: 80
         protocol: TCP
-    fqdn:
-      nrf: 'nrf-regional'
-      udr: 'udr-regional'
+    nfInterfaces:
+      sbi: 'eth0'
     compute:
       req:
         cpu: '100m'
@@ -133,60 +134,35 @@ metadata:
   name: oai-udm-nf-conf
   namespace: oaiops
 data:
-  udm.conf: |
-    UDM =
-    {
-      INSTANCE_ID = 0;
-      PID_DIRECTORY = "/var/run";
-      UDM_NAME = "oai-udm";
-      LOG_LEVEL = "{{ conf["logLevel"] if "logLevel" in conf.keys() else 'debug' }}";
-
-      INTERFACES:{
-        # UDM binded interface for SBI interface (e.g., communication with UDR, AUSF)
-        SBI:{
-            INTERFACE_NAME = "{{ conf['nfInterfaces']['sbi'] if 'nfInterfaces' in conf.keys() and 'sbi' in conf['nfInterfaces'].keys() else 'eth0' }}";
-            IPV4_ADDRESS   = "read";
-            # YOUR NETWORK CONFIG HERE (default: 80)
-            PORT           = 80;
-            PPID           = 60;
-            # YOUR NETWORK CONFIG HERE (default: v1)
-            API_VERSION    = "v1";
-            # YOUR NETWORK CONFIG HERE (default: 8080)
-            HTTP2_PORT     = 8080;
-        };
-      };
-
-      # SUPPORT FEATURES
-      SUPPORT_FEATURES: {
-        # STRING, {"yes", "no"},
-        # Set to yes if UDM will relying on a DNS to resolve UDR's FQDN
-        USE_FQDN_DNS = "yes";
-        # Set to yes to enable HTTP2 for AUSF server
-        USE_HTTP2    = "no";
-        # Set to 'yes' if UDM resgisters to an NRF
-        REGISTER_NRF = "no";
-      }
-
-      UDR:{
-        IPV4_ADDRESS   = "127.0.0.1";
-        # YOUR NETWORK CONFIG HERE (default: 80)
-        PORT           = 80;
-        # YOUR API VERSION FOR UDR CONFIG HERE (default: v1)
-        API_VERSION    = "v1";
-        FQDN           = "{{ conf['fqdn']['udr'] if 'fqdn' in conf.keys() and 'udr' in conf['fqdn'].keys() else 'oai-udr' }}"
-      };
-
-      NRF :
-      {
-        IPV4_ADDRESS = "127.0.0.1";
-        # YOUR NRF CONFIG HERE (default: 80)
-        PORT         = 80;
-        # YOUR NRF API VERSION HERE
-        API_VERSION  = "v1";
-        FQDN         = "{{ conf['fqdn']['nrf'] if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys() else 'oai-nrf' }}";
-      };
-    };
-
+  udm.yaml: |
+    # Log level
+    log_level:
+      general: {{ conf['logLevel'] }}
+    register_nf:
+      general: yes
+    http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
+    ############## SBI Interfaces
+    ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
+    nfs:
+      udm:
+        host: {{ conf['fqdn']['udm'] }}
+        sbi:
+          port: 80
+          api_version: v1
+          interface_name: {{ conf['nfInterfaces']['sbi'] }}
+      udr:
+        host: {{ conf['fqdn']['udr'] }}
+        sbi:
+          port: 80
+          api_version: v1
+      nrf:
+        host: {{ conf['fqdn']['nrf'] }}
+        sbi:
+          port: 80
+          api_version: v1
+    ############## NF-specific configuration
+    udm:
+      udm_name: "OAI-UDM"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -207,26 +183,15 @@ spec:
       labels:
         app.kubernetes.io/name: oai-udm
     spec:
-      # securityContext:
-      #   runAsGroup: 0
-      #   runAsUser: 0
-      imagePullSecrets:
-      - name: regcred
+      securityContext:
+        runAsGroup: 0
+        runAsUser: 0
+      # imagePullSecrets:
+      # - name: regcred
       containers:
       - name: udm-controller
-        image: "docker.io/arorasagar/oai-udm-controller:v1.5.1"
-        imagePullPolicy: Always
-        command:
-        - 'kopf'
-        - 'run' 
-        - '/root/.local/controller.py'
-        - '--all-namespaces'
-        - '--liveness=http://0.0.0.0:8080/healthz'
-        securityContext:
-          allowPrivilegeEscalation: false
-          capabilities:
-            drop:
-            - ALL
+        image: "hydrogen.local/oai-udm-controller:develop"
+        imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'
             value: 'udm'
@@ -235,9 +200,13 @@ spec:
           - name: 'DEPLOYMENT_FETCH_ITERATIONS'
             value: '100'
           - name: 'NF_CONF_PATH'
-            value: '/tmp/nf/udm.conf'
+            value: '/tmp/nf/udm.yaml'
           - name: 'OP_CONF_PATH'
             value: '/tmp/op/udm.yaml'
+          - name: 'TESTING'
+            value: 'no'
+          - name: 'KUBERNETES_BASE_URL'
+            value: 'https://kubernetes.default.svc'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf
@@ -257,25 +226,12 @@ spec:
           limits:
             memory: "128Mi"
             cpu: "50m"
-        resources:
-          requests:
-            memory: "128Mi"
-            cpu: "50m"
-          limits:
-            memory: "250Mi"
-            cpu: "300m"
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8080
-          initialDelaySeconds: 60
-          periodSeconds: 30
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: 8080
-          initialDelaySeconds: 10
-          periodSeconds: 30
+        # livenessProbe:
+        #   httpGet:
+        #     path: /healthz
+        #     port: 8080
+        #   initialDelaySeconds: 2
+        #   periodSeconds: 5
       volumes:
       - configMap:
           name: oai-udm-op-conf

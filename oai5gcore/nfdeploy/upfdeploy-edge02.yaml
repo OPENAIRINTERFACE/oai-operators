@@ -1,43 +1,36 @@
 apiVersion: ref.nephio.org/v1alpha1
 kind: Config
 metadata:
-  name: upf-edge02-smf-regional
+  name: upf-edge02-config
   namespace: oai-upf
 spec:
   config:
     apiVersion: workload.nephio.org/v1alpha1
-    kind: SMFDeployment
+    kind: UPFDeployment
     metadata:
-      name: smf-regional
-      namespace: oaicp
+      name: upf-edge02-config
+      namespace: oai-upf
     spec:
-      capacity:
-        maxDownlinkThroughput: "0"
-        maxNFConnections: 5
-        maxSessions: 500
-        maxUplinkThroughput: "0"
-      interfaces:
-      - name: n4
-        ipv4:
-          address: 172.1.1.254/24
-          gateway: 172.1.1.1
-        vlanID: 2
-      networkInstances:
-      - name: vpc-internal
-        interfaces:
-        - n4
+      logLevel: info
+      image: 'selfix.sboai.cs.eurecom.fr/oai-upf:ci-tmp-pr-16-4deecd64'
+      fqdn:
+        nrf: 'nrf-regional.oaicp.svc.cluster.local'
+        smf: 'smf-regional.oaicp.svc.cluster.local'
+      nssai:
+        - sst: 1
+          sd: '0xFFFFFF'
 ---
 apiVersion: workload.nephio.org/v1alpha1
 kind: UPFDeployment
 metadata: 
-  name: upf-edge-02
+  name: upf-edge02
   namespace: oai-upf
 spec:
   capacity:
     maxDownlinkThroughput: 5G
     maxUplinkThroughput: 5G
   configRefs:
-  - name: upf-edge02-smf-regional
+  - name: upf-edge02-config
     namespace: oai-upf
     apiVersion: ref.nephio.org/v1alpha1
     kind: Config

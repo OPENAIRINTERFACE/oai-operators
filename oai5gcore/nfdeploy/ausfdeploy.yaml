@@ -1,7 +1,30 @@
+apiVersion: ref.nephio.org/v1alpha1
+kind: Config
+metadata:
+  name: ausf-config
+  namespace: oaicp
+spec:
+  config:
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: AUSFDeployment
+    metadata:
+      name: ausf-config
+      namespace: oaicp
+    spec:
+      logLevel: info
+      image: 'docker.io/oaisoftwarealliance/oai-ausf:develop'
+      fqdn:
+        udm: udm-regional
+        nrf: nrf-regional
+---
 apiVersion: workload.nephio.org/v1alpha1
 kind: AUSFDeployment
 metadata:
-  name: ausf-regional
   namespace: oaicp
+  name: ausf-regional
 spec:
   configRefs:
+  - name: ausf-config
+    namespace: oaicp
+    apiVersion: ref.nephio.org/v1alpha1
+    kind: Config

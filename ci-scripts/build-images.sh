@@ -1,10 +1,10 @@
 #/bin/bash
 ## To use
-## ./build-images.sh $TAG $PARENT_DOCKER_REPO
+## ./build-images.sh $TAG $PARENT
 set -eo pipefail
 
 TAG=$1
-PARENT=$2
+PARENT=$2  #parent docker repo for re-tag and push
 
 docker build -f ../operators/amf/Dockerfile -t $PARENT/oai-amf-controller:$TAG ../operators/amf/ --no-cache
 docker build -f ../operators/smf/Dockerfile -t $PARENT/oai-smf-controller:$TAG ../operators/smf/ --no-cache
@@ -14,7 +14,7 @@ docker build -f ../operators/udr/Dockerfile -t $PARENT/oai-udr-controller:$TAG .
 docker build -f ../operators/udm/Dockerfile -t $PARENT/oai-udm-controller:$TAG ../operators/udm/ --no-cache
 docker build -f ../operators/ausf/Dockerfile -t $PARENT/oai-ausf-controller:$TAG ../operators/ausf/ --no-cache
 
-docker login
+docker login -u docker -p docker $PARENT
 docker push $PARENT/oai-amf-controller:$TAG
 docker push $PARENT/oai-smf-controller:$TAG
 docker push $PARENT/oai-nrf-controller:$TAG

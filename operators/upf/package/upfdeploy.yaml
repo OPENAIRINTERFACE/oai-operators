@@ -1,9 +1,28 @@
+apiVersion: ref.nephio.org/v1alpha1
+kind: Config
+metadata:
+  name: upf-config
+spec:
+  config:
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: UPFDeployment
+    metadata:
+      name: upf-config
+      namespace: default
+    spec:
+      logLevel: info
+      image: 'docker.io/oaisoftwarealliance/oai-upf:develop'
+      fqdn:
+        nrf: 'localhost'
+        smf: 'localhost'
+      nssai:
+        - sst: 1
+          sd: 'FFFFFF'
+---
 apiVersion: workload.nephio.org/v1alpha1
 kind: UPFDeployment
 metadata:
   name: oai-upf
-  annotations:
-    config.kubernetes.io/local-config: "false"
 spec:
   capacity:
     maxUplinkThroughput: 1G
@@ -36,3 +55,7 @@ spec:
           pool:
             - prefix: 10.10.0.0/16
   configRefs:
+  - name: upf-config
+    namespace: default
+    apiVersion: ref.nephio.org/v1alpha1
+    kind: Config

@@ -1,6 +1,31 @@
+apiVersion: ref.nephio.org/v1alpha1
+kind: Config
+metadata:
+  name: nrf-config
+spec:
+  config:
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NRFDeployment
+    metadata:
+      name: nrf-config
+      namespace: default
+    spec:
+      logLevel: info
+      image: 'docker.io/oaisoftwarealliance/oai-nrf:develop'
+      nfInterfaces:
+        sbi: 'eth0'
+      ports:
+        - name: 'http'
+          port: 80
+          protocol: TCP
+---
 apiVersion: workload.nephio.org/v1alpha1
 kind: NRFDeployment
 metadata:
   name: oai-nrf
 spec:
   configRefs:
+  - name: nrf-config
+    namespace: default
+    apiVersion: ref.nephio.org/v1alpha1
+    kind: Config
