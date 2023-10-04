@@ -1,0 +1,8 @@
+oai-operators are distributed under 3-Clause BSD License.
+
+However, it also includes third party-software or yaml files indicated below. 
+The yaml files are downloaded only during testing or deployment phase and will
+not present in the git repository. 
+
+Credits for yaml files in crd/
+The Nephio Community: Apache 2 License

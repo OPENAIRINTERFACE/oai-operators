@@ -57,11 +57,19 @@ The operators are tested on Minikube `v1.30.1`, Kubernetes server `v1.26.3` and 
 If you want to use minikube as a testing environment then install it from their [website](https://minikube.sigs.k8s.io/docs/start/). In case you are interested you can follow this guide to create a minikube cluster with multus CNI enabled.
 
 
+## Licence info
+The source code is written under the 3-Clause BSD License
+
+The text for 3-Clause BSD License is also available under LICENSE file in the same directory.
+
+For more details on third party software, please read the NOTICE file in the same directory.
+
+
 ## Functioning of Operators
 
-The controller is listening to nephio proposed crd `workload.nephio.org_amfdeployments.yaml` cluster wide. In the future it will listen to OAI proposed CRDs also.
+The controller is listening to nephio proposed crd `workload.nephio.org_nfdeployments.yaml` cluster wide. In the future it will listen to OAI proposed CRDs also. In R1 of nephio `nf` stands for amf,smf,nrf,upf,udr,udm and ausf. In R2 `nf` crd is common for all the network functions provider field will be used to distinguish. 
 
-Controller requires configuration file of the network function and it allows configuring certain config parameters when the controller is deployed. The controller requires two configmaps when running inside a pod or during development phase you can just provide the path of the network function configuration file and the controllers configuration file. The reason of having controllers configuration file is to only expose some important paramters to configure the network function rather than exposing all the parameters. 
+Controller requires configuration file of the network function and it allows configuring certain config parameters when the controller is deployed. The controller requires two configmaps when running inside a pod or during development phase you can just provide the path of the network function configuration file and the controllers configuration file. Network function configuration file is a jinja2 template. The variable parameters of those fields are filled using `configRef` or `paramRef`. Controller configuration file only contains some constant values for nf `deployment` and resource consumption releated values. In the future these will be calculated dynamically based on the intent. 
 
 The idea of this controller is not to expose multiple configuration paramters but to easily deploy the network function with less efforts from the user. 
 
@@ -80,7 +88,7 @@ LOG_LEVEL = str(os.getenv('LOG_LEVEL','INFO'))    ## Log level of the controller
 TESTING = bool(os.getenv('TESTING','no'))    ## If testing the network function, it will remove the init container which checks for NRFs availability
 ```
 
-AMF needs network-attachement-defination for N2 interface. Normally its nephio which will provide the nad. Controller is also capable of creating a nad via changing these fields in deployment/amf.yaml configmap of amf.yaml
+AMF/SMF/UPF needs network-attachement-defination for N2/N4/N3 interfaces. Normally its nephio which will provide the nad. Controller is also capable of creating a nad via changing these fields in [oai5gcore/controllerdeploy/amf.yaml](./oai5gcore/controllerdeploy/amf.yaml) configmap `oai-amf-op-conf`
 
 ```bash
     nad:
@@ -88,14 +96,21 @@ AMF needs network-attachement-defination for N2 interface. Normally its nephio w
       create: False    #If false it will wait for multus defination in the cluster namespace
 ``` 
 
-In case of docker pull limit on your network better to use pull secrets, just authenticated with the docker hub. You can add the pull secret in the operator configuration, amf.yaml in configmap like below
+In case of docker pull limit on your network better to use pull secrets, just authenticated with the docker hub. You can add the pull secret in the operator configuration amf.yaml in configmap like below
 
 ```bash
     imagePullSecrets:
       - name: test
 ```
 
-**NOTE**: All the network function controllers except upf and nrf have the same functioning. Though they have a seperate code base but its still similar at the moment.
+At the moment pull secret is only for pulling controller image not `nf` image.
+
+**NOTE**: 
+
+1. All the network function controllers except upf and nrf have the same functioning. Though they have a seperate code base but its still similar at the moment.
+2. `delete_fn` is not really required at the moment but it is kept for the future if we would like to change something in the network function at time of gracefull deletion
+3. In `update_fn` we are rejecting any changes in the metadata field. This is done specially for `annotations`. Probably in the later release we will take these changes in consideration.
+4. NRF is the only `nf` at the moment which is exposing its `SBI` via metallb. So it is important to configure the cluster with metallb.
 
 In case you do not have a working cluster, you can check the last section. 
 
@@ -175,6 +190,9 @@ minikube delete
 minikube start --driver=docker --cni=bridge --extra-config=kubeadm.pod-network-cidr=10.244.0.0/16 --cpus=4
 git clone https://github.com/k8snetworkplumbingwg/multus-cni.git /tmp/multus
 kubectl create -f /tmp/multus/deployments/multus-daemonset-thick.yml
-# Enable the metrics server
+# Enable the metrics server (optional)
+minikube addons enable metallb
+## Configure metallb in the range you want it will be required by NRF.
+# Enable the metrics server (optional)
 minikube addons enable metrics-server
 ```
