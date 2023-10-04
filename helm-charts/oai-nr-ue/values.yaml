@@ -36,7 +36,7 @@ config:
   fullImsi: "001010000000100"       # make sure all the below entries are present in the subscriber database
   fullKey: "fec86ba6eb707ed08905757b1bb44b8f" 
   opc: "C42449363BBAD02B66D16BC975D77CC1"
-  dnn: "internet" 
+  dnn: "oai" 
   nssaiSst: "1"                     # configure according to gnb and amf, smf and upf 
   nssaiSd: "16777215" 
   useAdditionalOptions: "--sa -E --rfsim -r 106 --numerology 1 -C 3319680000 --nokrnmod --log_config.global_log_options level,nocolor,time" 
