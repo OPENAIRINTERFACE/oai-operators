@@ -196,3 +196,9 @@ minikube addons enable metallb
 # Enable the metrics server (optional)
 minikube addons enable metrics-server
 ```
+
+# Contribution requests
+
+In a general way, anybody who is willing can contribute on any part of the code in any network component.
+
+Contributions can be simple bugfixes, advices and remarks on the design, architecture, coding/implementation.
