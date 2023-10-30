@@ -33,16 +33,19 @@ def configure(settings: kopf.OperatorSettings, **_):
         settings.posting.level = logging.ERROR
     if LOG_LEVEL == 'DEBUG':
         settings.posting.level = logging.DEBUG
-    settings.persistence.finalizer = f"{NF_TYPE}deployments.workload.nephio.org/finalizer"
-    settings.persistence.progress_storage = kopf.AnnotationsProgressStorage(prefix=f"{NF_TYPE}deployments.openairinterface.org")
+    settings.persistence.finalizer = f"{NF_TYPE}.openairinterface.org"
+    settings.persistence.progress_storage = kopf.AnnotationsProgressStorage(prefix=f"{NF_TYPE}.openairinterface.org")
     settings.persistence.diffbase_storage = kopf.AnnotationsDiffBaseStorage(
-        prefix=f"{NF_TYPE}deployments.openairinterface.org",
+        prefix=f"{NF_TYPE}.openairinterface.org",
         key='last-handled-configuration',
     )
 
-@kopf.on.resume(f"{NF_TYPE}deployments")
-@kopf.on.create(f"{NF_TYPE}deployments")
+@kopf.on.resume(f"workload.nephio.org","NFDeployment")
+@kopf.on.create(f"workload.nephio.org","NFDeployment")
 def create_fn(spec, namespace, logger, patch, **kwargs):
+    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
+        logger.debug(f"Rejecting provider does not belong to the NFOperator")
+        return
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     nf_resources = conf['compute']
     nrf_svc = None
@@ -52,9 +55,9 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                 })
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
-    for config_ref in spec.get('configRefs'):
-        _temp = get_config_ref(name=config_ref['name'],namespace=config_ref['namespace'],logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()) and (_temp['output']['spec']['config']['kind'] == 'UDMDeployment'):
+    for param_ref in spec.get('parametersRefs'):
+        _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger)
+        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
             conf.update(_temp['output']['spec']['config']['spec'])
     nf_ports = conf['ports']
     if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys():
@@ -78,7 +81,7 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                           logger=logger,
                           ports=nf_ports,
                           kopf=kopf)
-    conf['fqdn'].update({f"{NF_TYPE}":svc_status['name']}) ## the svc name of the nf is an input for nf configuration
+    configuration['fqdn'].update({f"{NF_TYPE}":svc_status['name']}) ## the svc name of the nf is an input for nf configuration
 
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
@@ -133,9 +136,12 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                 kopf.info(kwargs['body'], reason='Logging', message=f"{NF_TYPE}deployments created", )
                 break
 
-@kopf.timer(f"{NF_TYPE}deployments", initial_delay=30, interval=30.0, idle=100)
+@kopf.timer(f"workload.nephio.org","NFDeployment", initial_delay=30, interval=30.0, idle=100)
 def reconcile_fn(spec, namespace, logger, patch, **kwargs):
     #fetch the current cm
+    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
+        logger.debug(f"Rejecting provider does not belong to the NFOperator")
+        return
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     conf.update({
                 'maxSubscribers': spec.get('maxSubscribers',1000),
@@ -148,9 +154,9 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
         nrf_svc = conf['fqdn']['nrf']
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
-    for config_ref in spec.get('configRefs'):
-        _temp = get_config_ref(name=config_ref['name'],namespace=config_ref['namespace'],logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()) and (_temp['output']['spec']['config']['kind'] == 'UDMDeployment'):
+    for param_ref in spec.get('parametersRefs'):
+        _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger)
+        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
             conf.update(_temp['output']['spec']['config']['spec'])
     nf_ports = conf['ports']
     #fetch the current svc and declaring kubernetes api object
@@ -169,7 +175,7 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                                   logger=logger,
                                   ports=nf_ports,
                                   kopf=kopf)
-    conf['fqdn'].update({f"{NF_TYPE}":svc_status['name']}) ## the svc name of the nf is an input for nf configuration
+    configuration['fqdn'].update({f"{NF_TYPE}":svc_status['name']}) ## the svc name of the nf is an input for nf configuration
 
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
@@ -263,9 +269,11 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                         kopf.info(kwargs['body'], reason='Logging', message=f"{NF_TYPE}deployments created", )
                         break
 
-@kopf.on.delete(f"{NF_TYPE}deployments",optional=True)
+@kopf.on.delete(f"workload.nephio.org","NFDeployment",optional=True)
 def delete_fn(spec, name, namespace, logger, **kwargs):
-
+    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
+        logger.debug(f"Rejecting provider does not belong to the NFOperator")
+        return
     #Delete deployment
     try:
         api = kubernetes.client.AppsV1Api()
@@ -312,6 +320,9 @@ def delete_fn(spec, name, namespace, logger, **kwargs):
 
 @kopf.on.update(f"{NF_TYPE}deployments")
 def update_fn(diff, spec, namespace, logger, patch, **kwargs):
+    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
+        logger.debug(f"Rejecting provider does not belong to the NFOperator")
+        return
     ## rejecting metadata related changes
     for op, field, old, new in diff:
         if 'metadata' in field:
@@ -367,9 +378,9 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
         nrf_svc = conf['fqdn']['nrf']
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
-    for config_ref in spec.get('configRefs'):
-        _temp = get_config_ref(name=config_ref['name'],namespace=config_ref['namespace'],logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()) and (_temp['output']['spec']['config']['kind'] == 'UDMDeployment'):
+    for param_ref in spec.get('parametersRefs'):
+        _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger)
+        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
             conf.update(_temp['output']['spec']['config']['spec'])
     nf_ports = conf['ports']
     #fetch the current svc and declaring kubernetes api object

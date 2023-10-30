@@ -32,14 +32,14 @@ rules:
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
   # - apiGroups: ["workload.nephio.org"]
-  #   resources: [ausfdeployments]
+  #   resources: [nfdeployments]
   #   verbs: [list, watch]
+  - apiGroups: ["workload.nephio.org"]
+    resources: [nfdeployments,nfdeployments/status]
+    verbs: [list, watch, update, patch]
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
-  - apiGroups: ["workload.nephio.org"]
-    resources: [ausfdeployments,ausfdeployments/status]
-    verbs: [list, watch, update, patch]
   - apiGroups: [""]
     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
     verbs:  [get, list, watch, create, update, patch, delete]
@@ -122,6 +122,11 @@ data:
       limits:
         cpu: '100m'
         memory: '256Mi'
+    logLevel: info
+    image: 'docker.io/oaisoftwarealliance/oai-ausf:develop'
+    fqdn:
+      udm: localhost
+      nrf: localhost
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -132,10 +137,10 @@ data:
     ############# Common configuration
     # Log level
     log_level:
-      general: {{ conf['logLevel'] }}
+      ausf: {{ conf['logLevel'] }}
     # If you enable registration, the NF will use the NRF discovery mechanism
     register_nf:
-      general: yes
+      ausf: {{ 'yes' if conf['communicationModel']['name'] == 'withNrf' else 'no' }}
     http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
 
     ############## SBI Interfaces

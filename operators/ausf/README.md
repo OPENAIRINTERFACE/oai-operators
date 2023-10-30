@@ -15,7 +15,7 @@
 
 The operator is designed using [kopf](https://kopf.readthedocs.io/). The operator is completely written in python. At the moment the operator is highly experimental and designed for orchestration via [nephio](https://nephio.org/). 
 
-It can be used for `oai-ausf` version `v1.5.1`.
+It can be used for `oai-ausf` version `v2.0.0`.
 
 **NOTE**: So far we have only tested the operator on a minikube cluster. 
 
@@ -46,16 +46,18 @@ The idea of this controller is not to expose multiple configuration paramters bu
 There are some environment parameters which are used by the controller to configure network function configuration files. They are present in [utils.py](controllers/utils.py)
 
 ```bash
-HTTPS_VERIFY = bool(os.getenv('HTTPS_VERIFY',False)) ## To verfiy HTTPs certificates when communicating with cluster
-TOKEN=os.popen('cat /var/run/secrets/kubernetes.io/serviceaccount/token').read() ## Token used to communicate with Kube cluster
+TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
 NF_TYPE=str(os.getenv('NF_TYPE','ausf'))      ## Network function name
 LABEL={'workload.nephio.org/oai': f"{NF_TYPE}"}   ## Labels to put inside the owned resources
 OP_CONF_PATH=str(os.getenv('OP_CONF_PATH',f"/tmp/op/{NF_TYPE}.yaml"))  ## Operators configuration file
-NF_CONF_PATH = str(os.getenv('NF_CONF_PATH',f"/tmp/nf/{NF_TYPE}.conf"))  ## Network function configuration file
+NF_CONF_PATH = str(os.getenv('NF_CONF_PATH',f"/tmp/nf/{NF_TYPE}.yaml"))  ## Network function configuration file
 DEPLOYMENT_FETCH_INTERVAL=int(os.getenv('DEPLOYMENT_FETCH_INTERVAL',1)) # Fetch the status of deployment every x seconds
 DEPLOYMENT_FETCH_ITERATIONS=int(os.getenv('DEPLOYMENT_FETCH_ITERATIONS',100))  # Number of times to fetch the deployment
 LOG_LEVEL = str(os.getenv('LOG_LEVEL','INFO'))    ## Log level of the controller
-TESTING = bool(os.getenv('TESTING','no'))    ## If testing the network function, it will remove the init container which checks for NRFs availability
+TESTING = str(os.getenv('TESTING','yes'))    ## If testing the network function, it will remove the init container which checks for NRFs availability
+HTTPS_VERIFY = bool(os.getenv('HTTPS_VERIFY',False)) ## To verfiy HTTPs certificates when communicating with cluster
+TOKEN=os.popen('cat /var/run/secrets/kubernetes.io/serviceaccount/token').read() ## Token used to communicate with Kube cluster
+KUBERNETES_BASE_URL = str(os.getenv('KUBERNETES_BASE_URL','http://127.0.0.1:8080'))
 ```
 
 In case of docker pull limit on your network better to use pull secrets, just authenticated with the docker hub. You can add the pull secret in the operator configuration, ausf.yaml in configmap like below
@@ -72,7 +74,7 @@ In case of docker pull limit on your network better to use pull secrets, just au
 The image is still not hosted on public respositories so you have to create an image
 
 ```bash
-docker build -f Dockerfile -t oai-ausf-controller:v1.5.1 . --no-cache
+docker build -f Dockerfile -t oai-ausf-controller:v2.0.0 . --no-cache
 ```
 
 Create the CRD

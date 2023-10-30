@@ -32,14 +32,14 @@ rules:
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
   # - apiGroups: ["workload.nephio.org"]
-  #   resources: [udrdeployments]
+  #   resources: [nfdeployments]
   #   verbs: [list, watch]
+  - apiGroups: ["workload.nephio.org"]
+    resources: [nfdeployments,nfdeployments/status]
+    verbs: [list, watch, update, patch]
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
-  - apiGroups: ["workload.nephio.org"]
-    resources: [udrdeployments,udrdeployments/status]
-    verbs: [list, watch, update, patch]
   - apiGroups: [""]
     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
     verbs:  [get, list, watch, create, update, patch, delete]
@@ -122,6 +122,16 @@ data:
       limits:
         cpu: '100m'
         memory: '512Mi'
+    logLevel: info
+    image: 'docker.io/oaisoftwarealliance/oai-udr:develop'
+    fqdn:
+      nrf: localhost
+    database:
+      host: mysql
+      type: mysql
+      user: test
+      pass: test
+      connection_timeout: 300 # seconds
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -131,10 +141,10 @@ data:
   udr.yaml: |
     # Log level
     log_level:
-      general: {{ conf['logLevel'] }}
+      udr: {{ conf['logLevel'] }}
     # If you enable registration, the NF will use the NRF discovery mechanism
     register_nf:
-      general: yes
+      udr: {{ 'yes' if conf['communicationModel']['name'] == 'withNrf' else 'no' }}
     http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
     ############## SBI Interfaces
     ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
@@ -202,6 +212,8 @@ spec:
             value: '/tmp/op/udr.yaml'
           - name: 'TESTING'
             value: 'yes'
+          - name: 'SVC_TYPE'
+            value: 'LoadBalancer'
           - name: 'KUBERNETES_BASE_URL'
             value: 'http://kubernetes.default.svc'
         volumeMounts:

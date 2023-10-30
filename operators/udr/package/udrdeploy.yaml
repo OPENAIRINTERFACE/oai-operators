@@ -1,40 +1,44 @@
+---
 apiVersion: ref.nephio.org/v1alpha1
 kind: Config
 metadata:
-  name: udr-config
+  name: common-core-ran-config
 spec:
   config:
-    apiVersion: workload.nephio.org/v1alpha1
-    kind: UDRDeployment
+    apiVersion: nfconfig.nephio.org/v1alpha1
+    kind: CommonCoreRANConfig
     metadata:
-      name: udr-config
+      name: common-core-ran
       namespace: default
     spec:
-      logLevel: info
-      image: 'docker.io/oaisoftwarealliance/oai-udr:develop'
-      fqdn:
-        nrf: oai-nrf
-      database:
-        host: mysql
-        type: mysql
-        user: test
-        pass: test
-        connection_timeout: 300 # seconds
-      subscriberInformation:
-        encOpcKey: C42449363BBAD02B66D16BC975D77CC1 ## opc
-        encPermanentKey: fec86ba6eb707ed08905757b1bb44b8f # key
-        firstSUPI: 001010000000100 
-        plmn:
-          mcc: 001
-          mnc: 01
+      plmnInfo:
+        - mcc: "001"
+          mnc: "01"
+          tac: 1
+          nssai:
+            - sst: 1
+              sd: ffffff
+              dnnInfo:
+                - name: internet
+                  sessionType: ipv4
+                  dns: 8.8.8.8
+            - sst: 2
+              sd: ffffff
+              dnnInfo:
+                - name: internet
+                  sessionType: ipv4
+                  dns: 8.8.8.8
+      communicationModel: 
+        - name: woNrf
+          nrfUri: http://nrf-nnrf:8000
 ---
 apiVersion: workload.nephio.org/v1alpha1
-kind: UDRDeployment
+kind: NFDeployment
 metadata:
   name: oai-udr
 spec:
-  configRefs:
-  - name: udr-config
-    namespace: default
+  provider: udr.openairinterface.org
+  parametersRefs:
+  - name: common-core-ran-config
     apiVersion: ref.nephio.org/v1alpha1
     kind: Config

@@ -3,11 +3,7 @@
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
 # The OpenAirInterface Software Alliance licenses this file to You under
-# the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.openairinterface.org/?page_id=698
+# the terms found in the LICENSE file in the root of this source tree.
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,11 +13,11 @@
 #-------------------------------------------------------------------------------
 # For more information about the OpenAirInterface (OAI) Software Alliance:
 #      contact@openairinterface.org
-################################################################################
+##################################################################################
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  namespace: oaiops
+  namespace: default
   name: oai-udr-operator
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -36,14 +32,14 @@ rules:
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
   # - apiGroups: ["workload.nephio.org"]
-  #   resources: [udrdeployments]
+  #   resources: [nfdeployments]
   #   verbs: [list, watch]
+  - apiGroups: ["workload.nephio.org"]
+    resources: [nfdeployments,nfdeployments/status]
+    verbs: [list, watch, update, patch]
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
-  - apiGroups: ["workload.nephio.org"]
-    resources: [udrdeployments,udrdeployments/status]
-    verbs: [list, watch, update, patch]
   - apiGroups: [""]
     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
     verbs:  [get, list, watch, create, update, patch, delete]
@@ -71,13 +67,13 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: oai-udr-operator
-    namespace: oaiops
+    namespace: default
 ## In case you want to restrict to a namespace uncomment this role and remove the rights from cluster role
 #---
 # apiVersion: rbac.authorization.k8s.io/v1
 # kind: Role
 # metadata:
-#   namespace: oaiops
+#   namespace: default
 #   name: oai-udr-operator-role
 # rules:
 #   # Framework: posting the events about the handlers progress/errors.
@@ -97,7 +93,7 @@ subjects:
 # apiVersion: rbac.authorization.k8s.io/v1
 # kind: RoleBinding
 # metadata:
-#   namespace: oaiops
+#   namespace: default
 #   name: oai-udr-operator-rolebinding-namespaced
 # roleRef:
 #   apiGroup: rbac.authorization.k8s.io
@@ -111,7 +107,6 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: oai-udr-op-conf
-  namespace: oaiops
 data:
   udr.yaml: |
     ports:
@@ -127,20 +122,29 @@ data:
       limits:
         cpu: '100m'
         memory: '512Mi'
+    logLevel: info
+    image: 'docker.io/oaisoftwarealliance/oai-udr:develop'
+    fqdn:
+      nrf: oai-nrf
+    database:
+      host: mysql
+      type: mysql
+      user: test
+      pass: test
+      connection_timeout: 300 # seconds
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: oai-udr-nf-conf
-  namespace: oaiops
 data:
   udr.yaml: |
     # Log level
     log_level:
-      general: {{ conf['logLevel'] }}
+      udr: {{ conf['logLevel'] }}
     # If you enable registration, the NF will use the NRF discovery mechanism
     register_nf:
-      general: yes
+      udr: {{ 'yes' if conf['communicationModel']['name'] == 'withNrf' else 'no' }}
     http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
     ############## SBI Interfaces
     ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
@@ -172,7 +176,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: oai-udr-controller
-  namespace: oaiops
   labels:
     app.kubernetes.io/name: oai-udr
 spec:
@@ -194,7 +197,7 @@ spec:
       # - name: regcred
       containers:
       - name: udr-controller
-        image: "hydrogen.local/oai-udr-controller:develop"
+        image: "oai-udr-controller:develop"
         imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'
@@ -209,8 +212,10 @@ spec:
             value: '/tmp/op/udr.yaml'
           - name: 'TESTING'
             value: 'no'
+          - name: 'SVC_TYPE'
+            value: 'LoadBalancer'
           - name: 'KUBERNETES_BASE_URL'
-            value: 'https://kubernetes.default.svc'
+            value: 'http://kubernetes.default.svc'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf

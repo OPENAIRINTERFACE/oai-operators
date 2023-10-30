@@ -32,14 +32,14 @@ rules:
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
   # - apiGroups: ["workload.nephio.org"]
-  #   resources: [udmdeployments]
+  #   resources: [nfdeployments]
   #   verbs: [list, watch]
+  - apiGroups: ["workload.nephio.org"]
+    resources: [nfdeployments,nfdeployments/status]
+    verbs: [list, watch, update, patch]
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
-  - apiGroups: ["workload.nephio.org"]
-    resources: [udmdeployments,udmdeployments/status]
-    verbs: [list, watch, update, patch]
   - apiGroups: [""]
     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
     verbs:  [get, list, watch, create, update, patch, delete]
@@ -122,6 +122,11 @@ data:
       limits:
         cpu: '100m'
         memory: '256Mi'
+    logLevel: info
+    image: 'docker.io/oaisoftwarealliance/oai-udm:develop'
+    fqdn:
+      nrf: localhost
+      udr: localhost
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -131,9 +136,9 @@ data:
   udm.yaml: |
     # Log level
     log_level:
-      general: {{ conf['logLevel'] }}
+      udm: {{ conf['logLevel'] }}
     register_nf:
-      general: yes
+      udm: {{ 'yes' if conf['communicationModel']['name'] == 'withNrf' else 'no' }}
     http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
     ############## SBI Interfaces
     ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
