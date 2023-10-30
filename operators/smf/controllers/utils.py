@@ -606,7 +606,7 @@ def delete_nad(name: str=None, namespace: str=None,
 
     return Response
 
-def get_config_ref(name: str=None, namespace: str=None,
+def get_param_ref(name: str=None, namespace: str=None,
               logger=None):
     '''
     :param name: name of the configmap

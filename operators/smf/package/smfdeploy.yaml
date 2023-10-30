@@ -117,10 +117,11 @@ spec:
         amf: 'oai-amf'
 ---
 apiVersion: workload.nephio.org/v1alpha1
-kind: SMFDeployment
+kind: NFDeployment
 metadata:
   name: oai-smf
 spec:
+  provider: smf.openairinterface.org
   capacity:
     maxSessions: 100
   configRefs:

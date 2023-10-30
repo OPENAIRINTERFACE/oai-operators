@@ -4,26 +4,39 @@ metadata:
   name: upf-config
 spec:
   config:
-    apiVersion: workload.nephio.org/v1alpha1
-    kind: UPFDeployment
+    apiVersion: nfconfig.nephio.org/v1alpha1
+    kind: CommonCoreRANConfig
     metadata:
-      name: upf-config
+      name: common-core-ran-config
       namespace: default
     spec:
-      logLevel: info
-      image: 'docker.io/oaisoftwarealliance/oai-upf:develop'
-      fqdn:
-        nrf: 'localhost'
-        smf: 'localhost'
-      nssai:
-        - sst: 1
-          sd: 'FFFFFF'
+      plmnInfo:
+        - mcc: "001"
+          mnc: "01"
+          tac: 1
+          nssai:
+            - sst: 1
+              sd: ffffff
+              dnnInfo:
+                - name: internet
+                  sessionType: ipv4
+                  dns: 8.8.8.8
+            - sst: 2
+              sd: ffffff
+              dnnInfo:
+                - name: internet
+                  sessionType: ipv4
+                  dns: 8.8.8.8
+      communicationModel: 
+        - name: withNrf
+          nrfUri: http://nrf-nnrf:8000
 ---
 apiVersion: workload.nephio.org/v1alpha1
-kind: UPFDeployment
+kind: NFDeployment
 metadata:
   name: oai-upf
 spec:
+  provider: upf.openairinterface.org
   capacity:
     maxUplinkThroughput: 1G
     maxDownlinkThroughput: 1G
@@ -54,7 +67,7 @@ spec:
         - name: internet
           pool:
             - prefix: 10.10.0.0/16
-  configRefs:
+  parametersRefs:
   - name: upf-config
     namespace: default
     apiVersion: ref.nephio.org/v1alpha1

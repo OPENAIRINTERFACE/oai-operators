@@ -6,10 +6,9 @@ metadata:
 spec:
   config:
     apiVersion: workload.nephio.org/v1alpha1
-    kind: AMFDeployment
+    kind: NFDeployment
     metadata:
       name: amf-config
-      namespace: oaicp
     spec:
       logLevel: info
       plmn:
@@ -27,15 +26,14 @@ spec:
         udm: 'udm-regional'
 ---
 apiVersion: workload.nephio.org/v1alpha1
-kind: AMFDeployment
+kind: NFDeployment
 metadata:
   name: amf-regional
   namespace: oaicp
 spec:
+  provider: amf.openairinterface.org
   capacity:
-    maxDownlinkThroughput: "0"
     maxSubscribers: 64
-    maxUplinkThroughput: "0"
   interfaces:
   - name: n2
     ipv4:
@@ -46,8 +44,7 @@ spec:
   - name: vpc-ran
     interfaces:
     - n2
-  configRefs:
+  parametersRefs:
   - name: amf-config
-    namespace: oaicp
     apiVersion: ref.nephio.org/v1alpha1
     kind: Config

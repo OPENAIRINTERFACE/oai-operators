@@ -3,11 +3,7 @@
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
 # The OpenAirInterface Software Alliance licenses this file to You under
-# the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.openairinterface.org/?page_id=698
+# the terms found in the LICENSE file in the root of this source tree.
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,11 +13,11 @@
 #-------------------------------------------------------------------------------
 # For more information about the OpenAirInterface (OAI) Software Alliance:
 #      contact@openairinterface.org
-################################################################################
+##################################################################################
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  namespace: oaiops
+  namespace: default
   name: oai-ausf-operator
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -36,14 +32,14 @@ rules:
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
   # - apiGroups: ["workload.nephio.org"]
-  #   resources: [ausfdeployments]
+  #   resources: [nfdeployments]
   #   verbs: [list, watch]
+  - apiGroups: ["workload.nephio.org"]
+    resources: [nfdeployments,nfdeployments/status]
+    verbs: [list, watch, update, patch]
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
-  - apiGroups: ["workload.nephio.org"]
-    resources: [ausfdeployments,ausfdeployments/status]
-    verbs: [list, watch, update, patch]
   - apiGroups: [""]
     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
     verbs:  [get, list, watch, create, update, patch, delete]
@@ -71,13 +67,13 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: oai-ausf-operator
-    namespace: oaiops
+    namespace: default
 ## In case you want to restrict to a namespace uncomment this role and remove the rights from cluster role
 #---
 # apiVersion: rbac.authorization.k8s.io/v1
 # kind: Role
 # metadata:
-#   namespace: oaiops
+#   namespace: default
 #   name: oai-ausf-operator-role
 # rules:
 #   # Framework: posting the events about the handlers progress/errors.
@@ -97,7 +93,7 @@ subjects:
 # apiVersion: rbac.authorization.k8s.io/v1
 # kind: RoleBinding
 # metadata:
-#   namespace: oaiops
+#   namespace: default
 #   name: oai-ausf-operator-rolebinding-namespaced
 # roleRef:
 #   apiGroup: rbac.authorization.k8s.io
@@ -111,7 +107,6 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: oai-ausf-op-conf
-  namespace: oaiops
 data:
   ausf.yaml: |
     nfInterfaces:
@@ -127,21 +122,25 @@ data:
       limits:
         cpu: '100m'
         memory: '256Mi'
+    logLevel: info
+    image: 'docker.io/oaisoftwarealliance/oai-ausf:develop'
+    fqdn:
+      udm: oai-udm
+      nrf: oai-nrf
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: oai-ausf-nf-conf
-  namespace: oaiops
 data:
   ausf.yaml: |
     ############# Common configuration
     # Log level
     log_level:
-      general: {{ conf['logLevel'] }}
+      ausf: {{ conf['logLevel'] }}
     # If you enable registration, the NF will use the NRF discovery mechanism
     register_nf:
-      general: yes
+      ausf: {{ 'yes' if conf['communicationModel']['name'] == 'withNrf' else 'no' }}
     http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
 
     ############## SBI Interfaces
@@ -171,7 +170,6 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: oai-ausf-controller
-  namespace: oaiops
   labels:
     app.kubernetes.io/name: oai-ausf
 spec:
@@ -189,11 +187,11 @@ spec:
       securityContext:
         runAsGroup: 0
         runAsUser: 0
-      # imagePullSecrets:
-      # - name: regcred
+      imagePullSecrets:
+      - name: regcred
       containers:
       - name: ausf-controller
-        image: "hydrogen.local/oai-ausf-controller:develop"
+        image: "oai-ausf-controller:develop"
         imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'
@@ -209,7 +207,7 @@ spec:
           - name: 'TESTING'
             value: 'no'
           - name: 'KUBERNETES_BASE_URL'
-            value: 'https://kubernetes.default.svc'
+            value: 'http://kubernetes.default.svc'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf

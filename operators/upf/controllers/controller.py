@@ -33,16 +33,19 @@ def configure(settings: kopf.OperatorSettings, **_):
         settings.posting.level = logging.ERROR
     if LOG_LEVEL == 'DEBUG':
         settings.posting.level = logging.DEBUG
-    settings.persistence.finalizer = f"{NF_TYPE}deployments.workload.nephio.org/finalizer"
-    settings.persistence.progress_storage = kopf.AnnotationsProgressStorage(prefix=f"{NF_TYPE}deployments.openairinterface.org")
-    # settings.persistence.diffbase_storage = kopf.AnnotationsDiffBaseStorage(
-    #     prefix=f"{NF_TYPE}deployments.openairinterface.org",
-    #     key='last-handled-configuration',
-    # )
+    settings.persistence.finalizer = f"{NF_TYPE}.openairinterface.org"
+    settings.persistence.progress_storage = kopf.AnnotationsProgressStorage(prefix=f"{NF_TYPE}.openairinterface.org")
+    settings.persistence.diffbase_storage = kopf.AnnotationsDiffBaseStorage(
+        prefix=f"{NF_TYPE}.openairinterface.org",
+        key='last-handled-configuration',
+    )
 
-@kopf.on.resume(f"{NF_TYPE}deployments")
-@kopf.on.create(f"{NF_TYPE}deployments")
+@kopf.on.resume(f"workload.nephio.org","NFDeployment")
+@kopf.on.create(f"workload.nephio.org","NFDeployment")
 def create_fn(spec, namespace, logger, patch, **kwargs):
+    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
+        logger.debug(f"Rejecting provider does not belong to the NFOperator")
+        return
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     nf_resources = conf['compute']
     nrf_svc = None
@@ -56,14 +59,14 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
     if 'nad' not in conf.keys():
         conf.update({'nad':{'create':False}})
     data_networks = []
-    for config_ref in spec.get('configRefs'):
-        _temp = get_config_ref(name=config_ref['name'],namespace=config_ref['namespace'],logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()) and (_temp['output']['spec']['config']['kind'] == 'UPFDeployment'):
+    for param_ref in spec.get('parametersRefs'):
+        _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger)
+        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
             conf.update(_temp['output']['spec']['config']['spec'])
     if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys():
         nrf_svc = conf['fqdn']['nrf']
     nf_ports = conf['ports']
-    data_networks = [y for i in conf['networkInstances'] if 'dataNetworks' in i for y in i['dataNetworks']] #taking out all the dataNetworks
+    data_networks = [y for i in conf['networkInstances'] if 'dataNetworks' in i for y in i['dataNetworks']] #collecting all the dataNetworks
     ## TODO: for all the DNNs we will use the same nssai because the crd does not provide
     if len(data_networks)!=0:
         dnn_list = [] 
@@ -148,8 +151,11 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                 kopf.info(kwargs['body'], reason='Logging', message=f"{NF_TYPE}deployments created", )
                 break
 
-@kopf.timer(f"{NF_TYPE}deployments", initial_delay=30, interval=30.0, idle=100)
+@kopf.timer(f"workload.nephio.org","NFDeployment", initial_delay=30, interval=30.0, idle=100)
 def reconcile_fn(spec, namespace, logger, patch, **kwargs):
+    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
+        logger.debug(f"Rejecting provider does not belong to the NFOperator")
+        return
     #fetch the current cm
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     conf.update({
@@ -166,9 +172,9 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
     if 'nad' not in conf.keys():
         conf.update({'nad':{'create':False}})
     data_networks = []
-    for config_ref in spec.get('configRefs'):
-        _temp = get_config_ref(name=config_ref['name'],namespace=config_ref['namespace'],logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()) and (_temp['output']['spec']['config']['kind'] == 'UPFDeployment'):
+    for param_ref in spec.get('parametersRefs'):
+        _temp = get_param_ref(name=param_ref['name'],namespace=param_ref['namespace'],logger=logger)
+        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
             conf.update(_temp['output']['spec']['config']['spec'])
     nf_ports = conf['ports']
     data_networks = [y for i in conf['networkInstances'] if 'dataNetworks' in i for y in i['dataNetworks']] #taking out all the dataNetworks
@@ -289,9 +295,11 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                         kopf.info(kwargs['body'], reason='Logging', message=f"{NF_TYPE}deployments created", )
                         break
 
-@kopf.on.delete(f"{NF_TYPE}deployments",optional=True)
+@kopf.on.delete(f"workload.nephio.org","NFDeployment",optional=True)
 def delete_fn(spec, name, namespace, logger, **kwargs):
-
+    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
+        logger.debug(f"Rejecting provider does not belong to the NFOperator")
+        return
     #Delete deployment
     try:
         api = kubernetes.client.AppsV1Api()
@@ -350,6 +358,9 @@ def delete_fn(spec, name, namespace, logger, **kwargs):
 
 @kopf.on.update(f"{NF_TYPE}deployments")
 def update_fn(diff, spec, namespace, logger, patch, **kwargs):
+    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
+        logger.debug(f"Rejecting provider does not belong to the NFOperator")
+        return
     ## rejecting metadata related changes
     for op, field, old, new in diff:
         if 'metadata' in field:
@@ -410,9 +421,9 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
         conf.update({'nad':{'create':False}})
 
     data_networks = []
-    for config_ref in spec.get('configRefs'):
-        _temp = get_config_ref(name=config_ref['name'],namespace=config_ref['namespace'],logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()) and (_temp['output']['spec']['config']['kind'] == 'UPFDeployment'):
+    for param_ref in spec.get('parametersRefs'):
+        _temp = get_param_ref(name=param_ref['name'],namespace=param_ref['namespace'],logger=logger)
+        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
             conf.update(_temp['output']['spec']['config']['spec'])
     nf_ports = conf['ports']
     data_networks = [y for i in conf['networkInstances'] if 'dataNetworks' in i for y in i['dataNetworks']] #taking out all the dataNetworks

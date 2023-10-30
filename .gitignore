@@ -94,6 +94,4 @@ dmypy.json
 cython_debug/
 
 ## Ignore downloaded crds
-crd/req*
-crd/ref*
-crd/workload*
+crd/*

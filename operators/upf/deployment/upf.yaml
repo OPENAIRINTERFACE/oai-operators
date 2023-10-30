@@ -32,10 +32,10 @@ rules:
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
   # - apiGroups: ["workload.nephio.org"]
-  #   resources: [upfdeployments]
+  #   resources: [nfdeployments]
   #   verbs: [list, watch]
   - apiGroups: ["workload.nephio.org"]
-    resources: [upfdeployments,upfdeployments/status]
+    resources: [nfdeployments,nfdeployments/status]
     verbs: [list, watch, update, patch]
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
@@ -135,6 +135,11 @@ data:
       limits:
         cpu: '100m'
         memory: '512Mi'
+    logLevel: info
+    image: 'docker.io/oaisoftwarealliance/oai-upf:develop'
+    fqdn:
+      nrf: 'localhost'
+      smf: 'localhost'
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -145,18 +150,20 @@ data:
     ############# Common configuration
     # Log level for all the NFs
     log_level:
-      general: {{ conf['logLevel'] }}
+      upf: {{ conf['logLevel'] }}
     # If you enable registration, the other NFs will use the NRF discovery mechanism
     register_nf:
-      general: yes
+      upf: {{ 'yes' if conf['communicationModel']['name'] == 'withNrf' else 'no' }}
     http_version: 2
     ## general single_nssai configuration
     ## Defines YAML anchors, which are reused in the config file
     snssais:
-      {%- for i in conf['nssai'] %}
-      - &slice_{{ conf['nssai'].index(i) }}
-        sst: {{ i['sst'] }}
-        sd: {{ i['sd'] if 'sd' in i.keys() else 'FFFFFF' }}
+      {%- for i in conf['plmnInfo']%}
+      {%- for s in i['nssai']%}
+      - &slice_{{ i['nssai'].index(s) }}
+        sst: {{ s['sst'] }}
+        sd: {{ s['sd'] if 'sd' in s.keys() else 'FFFFFF' }}
+      {%- endfor %}
       {%- endfor %}
     ############## SBI Interfaces
     ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
@@ -197,20 +204,26 @@ data:
         enable_snat: yes           # If "on": Source natting is done for UE, DEFAULT= off
       remote_n6_gw: localhost      # Dummy host since simple-switch does not use N6 GW
       upf_info:
-        {%- for i in conf['nssai'] %}
-        - sst: {{ i['sst'] }}
-          sd: {{ i['sd'] if 'sd' in i.keys() else '0xFFFFFF' }}
-          dnnList:
-        {%- for d in i['dnnList'] %}
-            - dnn: {{ d }}
+        sNssaiUpfInfoList:
+        {%- for i in conf['plmnInfo']%}
+        {%- for s in i['nssai']%}
+        - sNssai: *slice_{{ i['nssai'].index(s) }}
+          dnnUpfInfoList:
+        {%- for d in i['dnnInfo'] %}
+              - dnn: {{ d['name'] }}
+        {%- endfor %}
         {%- endfor %}
         {%- endfor %}
     ## DNN configuration
     dnns:
-      {%- for l in conf['dnns'] %}
-      - dnn: {{ l['dnn'] }}
+      {%- for i in conf['plmnInfo']%}
+      {%- for s in i['nssai']%}
+      {%- for d in i['dnnInfo'] %}
+      - dnn: {{ d['name'] }}
         pdu_session_type: IPV4
-        ipv4_subnet: {{ l['subnet'] }}
+        ipv4_subnet: {{ d['subnet'] }}
+      {%- endfor %}
+      {%- endfor %}
       {%- endfor %}
 ---
 apiVersion: apps/v1

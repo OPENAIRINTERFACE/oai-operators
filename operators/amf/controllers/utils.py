@@ -483,7 +483,6 @@ def create_svc(name: str=None,
     kopf.adopt(svc)  # includes namespace, name, existing labels
     kopf.label(svc, labels, nested=['spec.template'])
     creation_timestamp =  None
-    print(svc)
     try:
         api = kubernetes.client.CoreV1Api()
         obj = api.create_namespaced_service(
@@ -606,7 +605,7 @@ def delete_nad(name: str=None, namespace: str=None,
 
     return Response
 
-def get_config_ref(name: str=None, namespace: str=None,
+def get_param_ref(name: str=None, namespace: str=None,
               logger=None):
     '''
     :param name: name of the configmap

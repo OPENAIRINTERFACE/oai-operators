@@ -40,8 +40,8 @@ TOKEN=os.popen('cat /var/run/secrets/kubernetes.io/serviceaccount/token').read()
 KUBERNETES_BASE_URL = str(os.getenv('KUBERNETES_BASE_URL','http://127.0.0.1:8080'))
 MYSQL_IMAGE = str(os.getenv('MYSQL_IMAGE',"docker.io/mysql:5.7"))
 CURL_IMAGE = str(os.getenv('CURL_IMAGE',"docker.io/alpine/curl:3.14"))
-LOADBALANCER_IP = str(os.getenv('LOADBALANCER_IP',None))
-SVC_TYPE = str(os.getenv('SVC_TYPE','ClusterIP')) 
+LOADBALANCER_IP = str(os.getenv('LOADBALANCER_IP',"random"))
+SVC_TYPE = str(os.getenv('SVC_TYPE','LoadBalancer')) 
 
 if SVC_TYPE not in ['ClusterIP', 'LoadBalancer', 'NodePort']:
     print(f"SVC_TYPE is case sensitive are you spelling {SVC_TYPE} correct?")
@@ -455,7 +455,7 @@ def create_svc(name: str=None,
             "selector": labels
           }
         }
-    if LOADBALANCER_IP is not None:
+    if LOADBALANCER_IP != "random":
         svc['spec'].update({'loadBalancerIP':LOADBALANCER_IP})
     if SVC_TYPE in ['LoadBalancer','NodePort']:
         svc['spec'].pop('clusterIP')
@@ -477,7 +477,7 @@ def create_svc(name: str=None,
 
     return {'creation_timestamp':creation_timestamp,'name':name}
 
-def get_config_ref(name: str=None, namespace: str=None,
+def get_param_ref(name: str=None, namespace: str=None,
               logger=None):
     '''
     :param name: name of the configmap
