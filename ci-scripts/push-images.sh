@@ -14,7 +14,23 @@
 # For more information about the OpenAirInterface (OAI) Software Alliance:
 #      contact@openairinterface.org
 ##################################################################################
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: oaiops
+
+#/bin/bash
+## To use
+## ./push-images.sh $TAG $PARENT $USER $PASS
+set -eo pipefail
+
+TAG=$1
+PARENT=$2  #parent docker repo for re-tag and push
+USER=$3
+PASS=$4
+
+docker login -u $USER -p $PASS $PARENT
+docker push $PARENT/oai-amf-controller:$TAG
+docker push $PARENT/oai-smf-controller:$TAG
+docker push $PARENT/oai-nrf-controller:$TAG
+docker push $PARENT/oai-udr-controller:$TAG
+docker push $PARENT/oai-udm-controller:$TAG
+docker push $PARENT/oai-ausf-controller:$TAG
+docker push $PARENT/oai-upf-controller:$TAG
+docker logout

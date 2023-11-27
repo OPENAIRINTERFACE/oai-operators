@@ -40,12 +40,9 @@ def configure(settings: kopf.OperatorSettings, **_):
         key='last-handled-configuration',
     )
 
-@kopf.on.resume(f"workload.nephio.org","NFDeployment")
-@kopf.on.create(f"workload.nephio.org","NFDeployment")
+@kopf.on.resume(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org")
+@kopf.on.create(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org")
 def create_fn(spec, namespace, logger, patch, **kwargs):
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     nf_resources = conf['compute']
     conf.update({
@@ -130,12 +127,9 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                 kopf.info(kwargs['body'], reason='Logging', message=f"{NF_TYPE}deployments created", )
                 break
 
-@kopf.timer(f"workload.nephio.org","NFDeployment", initial_delay=30, interval=30.0, idle=100)
+@kopf.timer(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org", initial_delay=30, interval=30.0, idle=100)
 def reconcile_fn(spec, namespace, logger, patch, **kwargs):
     #fetch the current cm
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     conf.update({
                 'maxSubscribers': spec.get('maxSubscribers',1000),
@@ -254,11 +248,8 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                         kopf.info(kwargs['body'], reason='Logging', message=f"{NF_TYPE}deployments created", )
                         break
 
-@kopf.on.delete(f"workload.nephio.org","NFDeployment",optional=True)
+@kopf.on.delete(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org",optional=True)
 def delete_fn(spec, name, namespace, logger, **kwargs):
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     #Delete deployment
     try:
         api = kubernetes.client.AppsV1Api()
@@ -303,11 +294,8 @@ def delete_fn(spec, name, namespace, logger, **kwargs):
     except ApiException as e:
         logger.debug(f"Exception {e} while deleting the Service for network function: {name} from namespace: {namespace}")
 
-@kopf.on.update(f"{NF_TYPE}deployments")
+@kopf.on.update(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org")
 def update_fn(diff, spec, namespace, logger, patch, **kwargs):
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     ## rejecting metadata related changes
     for op, field, old, new in diff:
         if 'metadata' in field:

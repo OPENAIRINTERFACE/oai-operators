@@ -31,12 +31,9 @@ rules:
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
-  # - apiGroups: ["workload.nephio.org"]
-  #   resources: [nfdeployments]
-  #   verbs: [list, watch]
   - apiGroups: ["workload.nephio.org"]
-    resources: [nfdeployments,nfdeployments/status]
-    verbs: [list, watch, update, patch]
+    resources: [nfdeployments,nfdeployments/status,nfconfigs]
+    verbs: [get,list, watch, update, patch]
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
@@ -112,6 +109,9 @@ data:
     nad: 
       parent: 'eth0'
       create: False
+    nfInterfaces:
+      n4: 'n4'
+      sbi: 'eth0'
     ports:
       - name: 'n4'
         port: 8805
@@ -119,9 +119,15 @@ data:
       - name: 'sbi'
         port: 80
         protocol: TCP
-    nfInterfaces:
-      n4: 'n4'
-      sbi: 'eth0'
+    logLevel: info
+    image: 'docker.io/oaisoftwarealliance/oai-smf:develop'
+    ueSettings:
+      mtu: 1500
+      secondary: 4.4.4.4
+    fqdn:
+      nrf: 'localhost'
+      udm: 'localhost'
+      amf: 'localhost'
     compute:
       req:
         cpu: '100m'
@@ -146,10 +152,12 @@ data:
     ## general single_nssai configuration
     ## Defines YAML anchors, which are reused in the config file
     snssais:
-      {%- for i in conf['nssai'] %}
-      - &slice_{{ conf['nssai'].index(i) }}
-        sst: {{ i['sst'] }}
-        sd: {{ i['sd'] if 'sd' in i.keys() else 'FFFFFF' }}
+      {%- for i in conf['PLMN']['plmnInfo']%}
+      {%- for s in i['nssai']%}
+      - &slice_{{ i['nssai'].index(s) }}
+        sst: {{ s['sst'] }}
+        sd: {{ s['sd'] if 'sd' in s.keys() else 'FFFFFF' }}
+      {%- endfor %}
       {%- endfor %}
     ############## SBI Interfaces
     ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
@@ -193,7 +201,7 @@ data:
             enable_usage_reporting: no
         {%- endfor %}
       ue_dns:
-        primary_ipv4: {{ conf['ueSettings']['primary'] }}
+        primary_ipv4: {{ conf['PLMN']['plmnInfo'][0]['nssai'][0]['dnnInfo'][0]['dns'] }}
         primary_ipv6: "2001:4860:4860::8888"
         secondary_ipv4: {{ conf['ueSettings']['secondary'] }}
         secondary_ipv6: "2001:4860:4860::8888"
@@ -204,30 +212,38 @@ data:
       # follows the SmfInfo datatype from 3GPP TS 29.510
       smf_info:
         sNssaiSmfInfoList:
-          {%- for i in conf['nssai'] %}
-          - sNssai: *slice_{{ conf['nssai'].index(i) }}
+          {%- for i in conf['PLMN']['plmnInfo'] %}
+          {%- for x in i['nssai'] %}
+          - sNssai: *slice_{{ i['nssai'].index(x) }}
             dnnSmfInfoList:
-          {%- for d in i['dnnList'] %}
-              - dnn: {{ d }}
+          {%- for d in x['dnnInfo'] %}
+              - dnn: {{ d['name'] }}
+          {%- endfor %}
           {%- endfor %}
           {%- endfor %}
       local_subscription_infos:
-        {%- for i in conf['nssai'] %}
-        {%- for d in i['dnnList'] %}
-        - single_nssai: *slice_{{ conf['nssai'].index(i) }}
-          dnn: {{ d }}
+        {%- for i in conf['PLMN']['plmnInfo'] %}
+        {%- for x in i['nssai'] %}
+        {%- for d in x['dnnInfo'] %}
+        - single_nssai: *slice_{{ i['nssai'].index(x) }}
+          dnn: {{ d['name'] }}
           qos_profile:
             5qi: 5
             session_ambr_ul: "200Mbps"
             session_ambr_dl: "400Mbps"
         {%- endfor %}
         {%- endfor %}
+        {%- endfor %}
     ## DNN configuration
     dnns:
-      {%- for l in conf['dnns'] %}
-      - dnn: "{{ l['dnn'] }}"
+      {%- for i in conf['PLMN']['plmnInfo'] %}
+      {%- for x in i['nssai'] %}
+      {%- for d in x['dnnInfo'] %}
+      - dnn: "{{ d['name'] }}"
         pdu_session_type: "IPV4"
-        ipv4_subnet: "{{ l['subnet'] }}"
+        ipv4_subnet: "{{ d['subnet'] }}"
+      {%- endfor %}
+      {%- endfor %}
       {%- endfor %}
 ---
 apiVersion: apps/v1

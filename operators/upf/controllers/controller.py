@@ -15,10 +15,11 @@
 #      contact@openairinterface.org
 ##################################################################################
 
+
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 ## Most of the generic functions and environment variables are in utils
-from utils import *
+from utils import * 
 
 import logging
 import kopf
@@ -40,19 +41,16 @@ def configure(settings: kopf.OperatorSettings, **_):
         key='last-handled-configuration',
     )
 
-@kopf.on.resume(f"workload.nephio.org","NFDeployment")
-@kopf.on.create(f"workload.nephio.org","NFDeployment")
+@kopf.on.resume(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org")
+@kopf.on.create(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org")
 def create_fn(spec, namespace, logger, patch, **kwargs):
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     nf_resources = conf['compute']
     nrf_svc = None
     conf.update({
-                'capacity': spec.get('capacity'),
+                'maxSubscribers': spec.get('maxSubscribers',1000),
                 'interfaces': spec.get('interfaces'),
-                'networkInstances': spec.get('networkInstances'),
+                'networkInstances': spec.get('networkInstances')
                 })
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
@@ -60,21 +58,26 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
         conf.update({'nad':{'create':False}})
     data_networks = []
     for param_ref in spec.get('parametersRefs'):
-        _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
+        _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger,
+                            apiVersion=param_ref['apiVersion'],kind=param_ref['kind'].lower())
+        if _temp['status'] and param_ref['kind']=='NFConfig':
+            for _config in _temp['output']['spec']['configRefs']:
+                conf.update({_config['kind']:_config['spec']})
+        elif _temp['status'] and param_ref['kind']=='Config':
             conf.update(_temp['output']['spec']['config']['spec'])
+    nf_ports = conf['ports']
     if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys():
         nrf_svc = conf['fqdn']['nrf']
-    nf_ports = conf['ports']
-    data_networks = [y for i in conf['networkInstances'] if 'dataNetworks' in i for y in i['dataNetworks']] #collecting all the dataNetworks
-    ## TODO: for all the DNNs we will use the same nssai because the crd does not provide
-    if len(data_networks)!=0:
-        dnn_list = [] 
-        conf['dnns'] = []
+    data_networks = [y for i in conf['networkInstances'] if 'dataNetworks' in i for y in i['dataNetworks']] #taking out all the dataNetworks
+    if len(data_networks)!=0 and 'PLMN' in conf.keys():
         for data_network in data_networks:
-            dnn_list.append(data_network['name'])  #only 1 prefix is supported at the moment
-            conf['dnns'].append({'dnn': data_network['name'], 'subnet': data_network['pool'][0]['prefix']})
-        [i.update({'dnnList':dnn_list}) for i in conf['nssai'] ]
+            # TODO: Consider nssai from all PLMNs
+            for nssai in conf['PLMN']['plmnInfo'][0]['nssai']:
+                for dnn in nssai['dnnInfo']:
+                    if dnn['name'] == data_network['name']:
+                        dnn.update({'subnet':data_network['pool'][0]['prefix']})
+
+    # jinja rendering for nf configuration
     try:
         patch.status['observedGeneration'] = 0
         patch.status['conditions'] = [{'lastTransitionTime':datetime.now().strftime(TIME_FORMAT),
@@ -100,13 +103,6 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
     env.add_extension('jinja2.ext.do')
     jinja_template = env.get_template(os.path.basename(NF_CONF_PATH))
     configuration = jinja_template.render(conf=conf)
-    sa_status = create_sa(name=kwargs['body']['metadata']['name'], 
-                          namespace=namespace,
-                          labels=LABEL,
-                          logger=logger,
-                          kopf=kopf)
-
-
     cm_status = create_config_map(name=kwargs['body']['metadata']['name'], 
                                 namespace=namespace,
                                 labels=LABEL, 
@@ -115,14 +111,20 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                                 kopf=kopf, 
                                 nf_type=NF_TYPE)
 
+    sa_status = create_sa(name=kwargs['body']['metadata']['name'], 
+                          namespace=namespace,
+                          labels=LABEL,
+                          logger=logger,
+                          kopf=kopf)
+
     deployment = create_deployment(name=kwargs['body']['metadata']['name'],
                                    namespace=namespace,
                                    compute=nf_resources, 
                                    labels= LABEL,
+                                   nrf_svc=nrf_svc,
                                    image=conf['image'],
                                    interfaces=conf['interfaces'],
                                    nad=conf['nad'],
-                                   nrf_svc=nrf_svc,
                                    image_pull_secrets=conf['imagePullSecrets'], 
                                    ports=nf_ports,
                                    config_map=cm_status['name'], 
@@ -151,15 +153,12 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                 kopf.info(kwargs['body'], reason='Logging', message=f"{NF_TYPE}deployments created", )
                 break
 
-@kopf.timer(f"workload.nephio.org","NFDeployment", initial_delay=30, interval=30.0, idle=100)
+@kopf.timer(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org", initial_delay=30, interval=30.0, idle=100)
 def reconcile_fn(spec, namespace, logger, patch, **kwargs):
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     #fetch the current cm
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     conf.update({
-                'capacity': spec.get('capacity'),
+                'maxSubscribers': spec.get('maxSubscribers',1000),
                 'interfaces': spec.get('interfaces'),
                 'networkInstances': spec.get('networkInstances')
                 })
@@ -173,20 +172,25 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
         conf.update({'nad':{'create':False}})
     data_networks = []
     for param_ref in spec.get('parametersRefs'):
-        _temp = get_param_ref(name=param_ref['name'],namespace=param_ref['namespace'],logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
+        _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger,
+                            apiVersion=param_ref['apiVersion'],kind=param_ref['kind'].lower())
+        if _temp['status'] and param_ref['kind']=='NFConfig':
+            for _config in _temp['output']['spec']['configRefs']:
+                conf.update({_config['kind']:_config['spec']})
+        elif _temp['status'] and param_ref['kind']=='Config':
             conf.update(_temp['output']['spec']['config']['spec'])
     nf_ports = conf['ports']
+    if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys():
+        nrf_svc = conf['fqdn']['nrf']
     data_networks = [y for i in conf['networkInstances'] if 'dataNetworks' in i for y in i['dataNetworks']] #taking out all the dataNetworks
-    ## TODO: for all the DNNs we will use the same nssai because the crd does not provide
-    if len(data_networks)!=0:
-        dnn_list = [] 
-        conf['dnns'] = []
+    if len(data_networks)!=0 and 'PLMN' in conf.keys():
         for data_network in data_networks:
-            dnn_list.append(data_network['name'])  #only 1 prefix is supported at the moment
-            conf['dnns'].append({'dnn': data_network['name'], 'subnet': data_network['pool'][0]['prefix']})
-        [i.update({'dnnList':dnn_list}) for i in conf['nssai'] ]
-    #fetch the current svc
+            # TODO: Consider nssai from all PLMNs
+            for nssai in conf['PLMN']['plmnInfo'][0]['nssai']:
+                for dnn in nssai['dnnInfo']:
+                    if dnn['name'] == data_network['name']:
+                        dnn.update({'subnet':data_network['pool'][0]['prefix']})
+    #fetch the current svc and declaring kubernetes api object
     try:
         api = kubernetes.client.CoreV1Api()
         obj = api.read_namespaced_service(
@@ -202,13 +206,13 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                                   logger=logger,
                                   ports=nf_ports,
                                   kopf=kopf)
-    conf['fqdn'].update({f"{NF_TYPE}":svc_status['name']}) ## the svc name of the nf is an input for nf configuration
-
+    conf['fqdn'].update({f"{NF_TYPE}":svc_status['name']})   ## the svc name of the nf is an input for nf configuration
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
     jinja_template = env.get_template(os.path.basename(NF_CONF_PATH))
     configuration = jinja_template.render(conf=conf)
 
+    #fetch the config map(s)
     try:
         obj = api.read_namespaced_config_map(
             namespace=namespace,
@@ -225,6 +229,7 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                                         kopf=kopf, 
                                         nf_type=NF_TYPE)
             cm_name = cm_status['name']
+
     #fetch the current sa
     try:
         obj = api.read_namespaced_service_account(
@@ -263,11 +268,11 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                                            compute=nf_resources, 
                                            labels= LABEL,
                                            image=conf['image'],
+                                           nrf_svc=nrf_svc,
                                            interfaces=conf['interfaces'],
                                            nad=conf['nad'],
                                            image_pull_secrets=conf['imagePullSecrets'], 
                                            ports=nf_ports,
-                                           nrf_svc=nrf_svc,
                                            config_map=cm_name, 
                                            sa_name=sa_name,
                                            nf_type=NF_TYPE,
@@ -295,11 +300,8 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                         kopf.info(kwargs['body'], reason='Logging', message=f"{NF_TYPE}deployments created", )
                         break
 
-@kopf.on.delete(f"workload.nephio.org","NFDeployment",optional=True)
+@kopf.on.delete(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org",optional=True)
 def delete_fn(spec, name, namespace, logger, **kwargs):
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     #Delete deployment
     try:
         api = kubernetes.client.AppsV1Api()
@@ -356,11 +358,8 @@ def delete_fn(spec, name, namespace, logger, **kwargs):
             logger.debug(f"Exception {e} while deleting the network-attachment-definitions.k8s.cni.cncf.io for network function: {name} from namespace: {namespace}")
 
 
-@kopf.on.update(f"{NF_TYPE}deployments")
+@kopf.on.update(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org")
 def update_fn(diff, spec, namespace, logger, patch, **kwargs):
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     ## rejecting metadata related changes
     for op, field, old, new in diff:
         if 'metadata' in field:
@@ -368,7 +367,6 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
             return
     #Delete deployment
     name = kwargs['body']['metadata']['name']
-
     try:
         api = kubernetes.client.AppsV1Api()
         obj = api.delete_namespaced_deployment(
@@ -407,7 +405,7 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
 
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     conf.update({
-                'capacity': spec.get('capacity'),
+                'maxSubscribers': spec.get('maxSubscribers',1000),
                 'interfaces': spec.get('interfaces'),
                 'networkInstances': spec.get('networkInstances')
                 })
@@ -422,20 +420,25 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
 
     data_networks = []
     for param_ref in spec.get('parametersRefs'):
-        _temp = get_param_ref(name=param_ref['name'],namespace=param_ref['namespace'],logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
+        _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger,
+                            apiVersion=param_ref['apiVersion'],kind=param_ref['kind'].lower())
+        if _temp['status'] and param_ref['kind']=='NFConfig':
+            for _config in _temp['output']['spec']['configRefs']:
+                conf.update({_config['kind']:_config['spec']})
+        elif _temp['status'] and param_ref['kind']=='Config':
             conf.update(_temp['output']['spec']['config']['spec'])
     nf_ports = conf['ports']
+    if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys():
+        nrf_svc = conf['fqdn']['nrf']
     data_networks = [y for i in conf['networkInstances'] if 'dataNetworks' in i for y in i['dataNetworks']] #taking out all the dataNetworks
-    ## TODO: for all the DNNs we will use the same nssai because the crd does not provide
-    if len(data_networks)!=0:
-        dnn_list = [] 
-        conf['dnns'] = []
+    if len(data_networks)!=0 and 'PLMN' in conf.keys():
         for data_network in data_networks:
-            dnn_list.append(data_network['name'])  #only 1 prefix is supported at the moment
-            conf['dnns'].append({'dnn': data_network['name'], 'subnet': data_network['pool'][0]['prefix']})
-        [i.update({'dnnList':dnn_list}) for i in conf['nssai'] ]
-    #fetch the current svc
+            # TODO: Consider nssai from all PLMNs
+            for nssai in conf['PLMN']['plmnInfo'][0]['nssai']:
+                for dnn in nssai['dnnInfo']:
+                    if dnn['name'] == data_network['name']:
+                        dnn.update({'subnet':data_network['pool'][0]['prefix']})
+    #fetch the current svc and declaring kubernetes api object
     try:
         api = kubernetes.client.CoreV1Api()
         obj = api.read_namespaced_service(
@@ -451,7 +454,7 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
                                   logger=logger,
                                   ports=nf_ports,
                                   kopf=kopf)
-    conf['fqdn'].update({f"{NF_TYPE}":svc_status['name']}) ## the svc name of the nf is an input for nf configuration
+    conf['fqdn'].update({f"{NF_TYPE}":svc_status['name']})   ## the svc name of the nf is an input for nf configuration
 
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
@@ -465,6 +468,7 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
                                 logger=logger, 
                                 kopf=kopf, 
                                 nf_type=NF_TYPE)
+
     deployment = create_deployment(name=kwargs['body']['metadata']['name'],
                                   namespace=namespace,
                                   compute=nf_resources, 

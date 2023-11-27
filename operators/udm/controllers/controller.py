@@ -15,6 +15,7 @@
 #      contact@openairinterface.org
 ##################################################################################
 
+
 from jinja2 import Environment, FileSystemLoader
 from pathlib import Path
 ## Most of the generic functions and environment variables are in utils
@@ -40,28 +41,27 @@ def configure(settings: kopf.OperatorSettings, **_):
         key='last-handled-configuration',
     )
 
-@kopf.on.resume(f"workload.nephio.org","NFDeployment")
-@kopf.on.create(f"workload.nephio.org","NFDeployment")
+@kopf.on.resume(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org")
+@kopf.on.create(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org")
 def create_fn(spec, namespace, logger, patch, **kwargs):
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     nf_resources = conf['compute']
     nrf_svc = None
-    conf.update({
-                'interfaces': spec.get('interfaces'),
-                'networkInstances': spec.get('networkInstances')
-                })
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
-    for param_ref in spec.get('parametersRefs'):
-        _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
-            conf.update(_temp['output']['spec']['config']['spec'])
-    nf_ports = conf['ports']
+    if spec.get('parametersRefs'):
+        for param_ref in spec.get('parametersRefs'):
+            _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger,
+                                apiVersion=param_ref['apiVersion'],kind=param_ref['kind'].lower())
+            if _temp['status'] and param_ref['kind']=='NFConfig':
+                for _config in _temp['output']['spec']['configRefs']:
+                    conf.update({_config['kind']:_config['spec']})
+            if _temp['status'] and param_ref['kind']=='Config':
+                conf.update(_temp['output']['spec']['config']['spec'])
     if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys():
         nrf_svc = conf['fqdn']['nrf']
+    nf_ports = conf['ports']
+    # jinja rendering for nf configuration
     try:
         patch.status['observedGeneration'] = 0
         patch.status['conditions'] = [{'lastTransitionTime':datetime.now().strftime(TIME_FORMAT),
@@ -81,13 +81,12 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                           logger=logger,
                           ports=nf_ports,
                           kopf=kopf)
-    configuration['fqdn'].update({f"{NF_TYPE}":svc_status['name']}) ## the svc name of the nf is an input for nf configuration
+    conf['fqdn'].update({f"{NF_TYPE}":svc_status['name']}) ## the svc name of the nf is an input for nf configuration
 
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
     jinja_template = env.get_template(os.path.basename(NF_CONF_PATH))
     configuration = jinja_template.render(conf=conf)
-
     cm_status = create_config_map(name=kwargs['body']['metadata']['name'], 
                                 namespace=namespace,
                                 labels=LABEL, 
@@ -95,6 +94,7 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                                 logger=logger, 
                                 kopf=kopf, 
                                 nf_type=NF_TYPE)
+
     sa_status = create_sa(name=kwargs['body']['metadata']['name'], 
                           namespace=namespace,
                           labels=LABEL,
@@ -107,7 +107,6 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                                    labels= LABEL,
                                    nrf_svc=nrf_svc,
                                    image=conf['image'],
-                                   interfaces=conf['interfaces'],
                                    image_pull_secrets=conf['imagePullSecrets'], 
                                    ports=nf_ports,
                                    config_map=cm_status['name'], 
@@ -136,28 +135,25 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                 kopf.info(kwargs['body'], reason='Logging', message=f"{NF_TYPE}deployments created", )
                 break
 
-@kopf.timer(f"workload.nephio.org","NFDeployment", initial_delay=30, interval=30.0, idle=100)
+@kopf.timer(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org", initial_delay=30, interval=30.0, idle=100)
 def reconcile_fn(spec, namespace, logger, patch, **kwargs):
     #fetch the current cm
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
-    conf.update({
-                'maxSubscribers': spec.get('maxSubscribers',1000),
-                'interfaces': spec.get('interfaces'),
-                'networkInstances': spec.get('networkInstances')
-                })
     nf_resources = conf['compute']
     nrf_svc = None
     if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys():
         nrf_svc = conf['fqdn']['nrf']
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
-    for param_ref in spec.get('parametersRefs'):
-        _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
-            conf.update(_temp['output']['spec']['config']['spec'])
+    if spec.get('parametersRefs'):
+        for param_ref in spec.get('parametersRefs'):
+            _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger,
+                                apiVersion=param_ref['apiVersion'],kind=param_ref['kind'].lower())
+            if _temp['status'] and param_ref['kind']=='NFConfig':
+                for _config in _temp['output']['spec']['configRefs']:
+                    conf.update({_config['kind']:_config['spec']})
+            if _temp['status'] and param_ref['kind']=='Config':
+                conf.update(_temp['output']['spec']['config']['spec'])
     nf_ports = conf['ports']
     #fetch the current svc and declaring kubernetes api object
     try:
@@ -175,8 +171,7 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                                   logger=logger,
                                   ports=nf_ports,
                                   kopf=kopf)
-    configuration['fqdn'].update({f"{NF_TYPE}":svc_status['name']}) ## the svc name of the nf is an input for nf configuration
-
+    conf['fqdn'].update({f"{NF_TYPE}":svc_status['name']})   ## the svc name of the nf is an input for nf configuration
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
     jinja_template = env.get_template(os.path.basename(NF_CONF_PATH))
@@ -239,7 +234,6 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                                            labels= LABEL,
                                            image=conf['image'],
                                            nrf_svc=nrf_svc,
-                                           interfaces=conf['interfaces'],
                                            image_pull_secrets=conf['imagePullSecrets'], 
                                            ports=nf_ports,
                                            config_map=cm_name, 
@@ -269,11 +263,8 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                         kopf.info(kwargs['body'], reason='Logging', message=f"{NF_TYPE}deployments created", )
                         break
 
-@kopf.on.delete(f"workload.nephio.org","NFDeployment",optional=True)
+@kopf.on.delete(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org",optional=True)
 def delete_fn(spec, name, namespace, logger, **kwargs):
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     #Delete deployment
     try:
         api = kubernetes.client.AppsV1Api()
@@ -318,11 +309,8 @@ def delete_fn(spec, name, namespace, logger, **kwargs):
     except ApiException as e:
         logger.debug(f"Exception {e} while deleting the Service for network function: {name} from namespace: {namespace}")
 
-@kopf.on.update(f"{NF_TYPE}deployments")
+@kopf.on.update(f"workload.nephio.org","NFDeployment", when=lambda spec, **_: spec.get('provider')==f"{NF_TYPE}.openairinterface.org")
 def update_fn(diff, spec, namespace, logger, patch, **kwargs):
-    if spec.get('provider')!=f"{NF_TYPE}.openairinterface.org":
-        logger.debug(f"Rejecting provider does not belong to the NFOperator")
-        return
     ## rejecting metadata related changes
     for op, field, old, new in diff:
         if 'metadata' in field:
@@ -367,21 +355,21 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
             sa_name = sa_status['name']
 
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
-    conf.update({
-                'maxSubscribers': spec.get('maxSubscribers',1000),
-                'interfaces': spec.get('interfaces'),
-                'networkInstances': spec.get('networkInstances')
-                })
     nf_resources = conf['compute']
     nrf_svc = None
     if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys():
         nrf_svc = conf['fqdn']['nrf']
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
-    for param_ref in spec.get('parametersRefs'):
-        _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger)
-        if _temp['status'] and ('kind' in _temp['output']['spec']['config'].keys()):
-            conf.update(_temp['output']['spec']['config']['spec'])
+    if spec.get('parametersRefs'):
+        for param_ref in spec.get('parametersRefs'):
+            _temp = get_param_ref(name=param_ref['name'],namespace=namespace,logger=logger,
+                                apiVersion=param_ref['apiVersion'],kind=param_ref['kind'].lower())
+            if _temp['status'] and param_ref['kind']=='NFConfig':
+                for _config in _temp['output']['spec']['configRefs']:
+                    conf.update({_config['kind']:_config['spec']})
+            if _temp['status'] and param_ref['kind']=='Config':
+                conf.update(_temp['output']['spec']['config']['spec'])
     nf_ports = conf['ports']
     #fetch the current svc and declaring kubernetes api object
     try:
@@ -399,7 +387,8 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
                                   logger=logger,
                                   ports=nf_ports,
                                   kopf=kopf)
-    conf['fqdn'].update({f"{NF_TYPE}":svc_status['name']}) ## the svc name of the nf is an input for nf configuration
+    conf['fqdn'].update({f"{NF_TYPE}":svc_status['name']})   ## the svc name of the nf is an input for nf configuration
+
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
     jinja_template = env.get_template(os.path.basename(NF_CONF_PATH))
@@ -419,7 +408,6 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
                                   labels=LABEL,
                                   nrf_svc=nrf_svc,
                                   image=conf['image'],
-                                  interfaces=conf['interfaces'],
                                   image_pull_secrets=conf['imagePullSecrets'], 
                                   ports=nf_ports,
                                   config_map=cm_status['name'], 
@@ -440,3 +428,4 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
                 patch.status['observedGeneration'] = status['observedGeneration']
                 kopf.info(kwargs['body'], reason='Logging', message=f"{NF_TYPE}deployments created", )
                 break
+                

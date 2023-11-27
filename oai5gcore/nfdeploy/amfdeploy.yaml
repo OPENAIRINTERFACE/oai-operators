@@ -1,34 +1,44 @@
-apiVersion: ref.nephio.org/v1alpha1
-kind: Config
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFConfig
 metadata:
-  name: amf-config
+  name: amf-core-config
   namespace: oaicp
 spec:
-  config:
-    apiVersion: workload.nephio.org/v1alpha1
-    kind: NFDeployment
-    metadata:
-      name: amf-config
-    spec:
-      logLevel: info
-      plmn:
-        mcc: '001'
-        mnc: '01'
-        tac: '0x0001'
-      nssai:
-        - sst: 1
-          sd: 'FFFFFF'
-      image: 'docker.io/oaisoftwarealliance/oai-amf:develop'
-      fqdn:
-        smf: 'smf-regional'
-        ausf: 'ausf-regional'
-        nrf: 'nrf-regional'
-        udm: 'udm-regional'
+  configRefs:
+    - apiVersion: cellular.nephio.org/v1alpha1
+      kind: PLMN
+      metadata:
+        name: oai-plmn
+      spec:
+        plmnInfo:
+          - plmnID:
+              mcc: "001"
+              mnc: "01"
+            tac: 1
+            nssai:
+              - sst: 1
+                sd: ffffff
+                dnnInfo:
+                  - name: internet
+                    sessionType: ipv4
+                    dns: 8.8.8.8
+    - apiVersion: cellular.nephio.org/v1alpha1
+      kind: ServedGUAMI
+      metadata:
+        name: oai-served-guami
+      spec:
+        - amfID:
+            amfPointer: '01'
+            amfRegionID: '01'
+            amfSetID: '001'
+          plmnID:
+            mcc: "001"
+            mnc: "01"
 ---
 apiVersion: workload.nephio.org/v1alpha1
 kind: NFDeployment
 metadata:
-  name: amf-regional
+  name: amf-core
   namespace: oaicp
 spec:
   provider: amf.openairinterface.org
@@ -45,6 +55,6 @@ spec:
     interfaces:
     - n2
   parametersRefs:
-  - name: amf-config
-    apiVersion: ref.nephio.org/v1alpha1
-    kind: Config
+  - name: amf-core-config
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NFConfig

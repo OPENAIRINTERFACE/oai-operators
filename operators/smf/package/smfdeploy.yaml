@@ -1,11 +1,19 @@
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: oai-smf-n4
+spec:
+  config: '{"cniVersion":"0.3.1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.1.1.254/24","gateway":"172.1.1.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
+---
 apiVersion: ref.nephio.org/v1alpha1
 kind: Config
 metadata:
   name: smf-regional-upf-edge01
 spec:
   config:
+    provider: upf.openairinterface.org
     apiVersion: workload.nephio.org/v1alpha1
-    kind: UPFDeployment
+    kind: NFDeployment
     metadata:
       name: upf-edge01
       namespace: default
@@ -37,7 +45,7 @@ spec:
         dataNetworks:
         - name: internet
           pool:
-          - prefix: 10.1.0.0/24
+          - prefix: 10.3.0.0/24
         interfaces:
         - n6
       - name: vpc-ran
@@ -50,8 +58,9 @@ metadata:
   name: smf-regional-upf-edge02
 spec:
   config:
+    provider: upf.openairinterface.org
     apiVersion: workload.nephio.org/v1alpha1
-    kind: UPFDeployment
+    kind: NFDeployment
     metadata:
       name: upf-edge02
       namespace: default
@@ -81,7 +90,7 @@ spec:
         - n4
       - name: vpc-internet
         dataNetworks:
-        - name: oai
+        - name: internet
           pool:
           - prefix: 10.3.0.0/24
         interfaces:
@@ -90,31 +99,29 @@ spec:
         interfaces:
         - n3
 ---
-apiVersion: ref.nephio.org/v1alpha1
-kind: Config
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFConfig
 metadata:
-  name: smf-config
+  name: oai-smf-config
 spec:
-  config:
-    apiVersion: workload.nephio.org/v1alpha1
-    kind: SMFDeployment
-    metadata:
-      name: smf-config
-      namespace: default
-    spec:
-      logLevel: info
-      image: 'docker.io/oaisoftwarealliance/oai-smf:develop'
-      nssai:
-        - sst: 1
-          sd: 'FFFFFF'
-      ueSettings:
-        primary: 8.8.8.8
-        secondary: 4.4.4.4
-        mtu: 1500
-      fqdn:
-        nrf: 'oai-nrf'
-        udm: 'oai-udm'
-        amf: 'oai-amf'
+  configRefs:
+    - apiVersion: cellular.nephio.org/v1alpha1
+      kind: PLMN
+      metadata:
+        name: oai-plmn
+      spec:
+        plmnInfo:
+          - plmnID:
+              mcc: "001"
+              mcc: "01"
+            tac: 1
+            nssai:
+              - sst: 1
+                sd: ffffff
+                dnnInfo:
+                  - name: internet
+                    sessionType: ipv4
+                    dns: 8.8.8.8
 ---
 apiVersion: workload.nephio.org/v1alpha1
 kind: NFDeployment
@@ -123,17 +130,25 @@ metadata:
 spec:
   provider: smf.openairinterface.org
   capacity:
-    maxSessions: 100
-  configRefs:
-  - name: smf-config
-    namespace: default
-    apiVersion: ref.nephio.org/v1alpha1
-    kind: Config
+    maxNFConnections: 10
+    maxSessions: 500
+  interfaces:
+  - name: n4
+    ipv4:
+      address: 172.1.1.254/24
+      gateway: 172.1.1.1
+    vlanID: 2
+  networkInstances:
+  - name: vpc-internal
+    interfaces:
+    - n4
+  parametersRefs:
+  - name: oai-smf-config
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NFConfig
   - name: smf-regional-upf-edge01
-    namespace: default
     apiVersion: ref.nephio.org/v1alpha1
     kind: Config
   - name: smf-regional-upf-edge02
-    namespace: default
     apiVersion: ref.nephio.org/v1alpha1
     kind: Config
