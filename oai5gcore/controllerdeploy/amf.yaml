@@ -34,12 +34,9 @@ rules:
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
-  # - apiGroups: ["workload.nephio.org"]
-  #   resources: [amfdeployments]
-  #   verbs: [list, watch]
   - apiGroups: ["workload.nephio.org"]
-    resources: [amfdeployments,amfdeployments/status]
-    verbs: [list, watch, update, patch]
+    resources: [nfdeployments,nfdeployments/status,nfconfigs]
+    verbs: [get,list, watch, update, patch]
   - apiGroups: [""]
     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
     verbs:  [get, list, watch, create, update, patch, delete]
@@ -81,7 +78,7 @@ subjects:
 #     resources: [events]
 #     verbs: [create]
 #   - apiGroups: ["workload.nephio.org"]
-#     resources: [amfdeployments,amfdeployments/status]
+#     resources: [nfdeployments,nfdeployments/status]
 #     verbs: [list, watch, update, patch]
 #   - apiGroups: [""]
 #     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
@@ -111,7 +108,7 @@ metadata:
 data:
   amf.yaml: |
     nad: 
-      parent: 'eth1'
+      parent: 'eth0'
       create: False
     # these ports are here for creating the kube-svc should be same for the nf
     nfInterfaces:
@@ -131,6 +128,13 @@ data:
       limits:
         cpu: '100m'
         memory: '512Mi'
+    logLevel: info
+    image: 'docker.io/oaisoftwarealliance/oai-amf:develop'
+    fqdn:
+      smf: 'smf-core'
+      ausf: 'ausf-core'
+      nrf: 'nrf-core'
+      udm: 'udm-core'
 ---
 apiVersion: v1
 kind: ConfigMap
@@ -139,19 +143,22 @@ metadata:
   namespace: oaiops
 data:
   amf.yaml: |
+    # Log level for all the NFs
     log_level:
-      general: {{ conf['logLevel'] }}
+      amf: {{ conf['logLevel'] }}
     # If you enable registration, the other NFs will use the NRF discovery mechanism
     register_nf:
-      general: yes
+      amf: yes
     http_version: 2
     ## general single_nssai configuration
     ## Defines YAML anchors, which are reused in the config file
     snssais:
-      {%- for i in conf['nssai'] %}
-      - &slice_{{ conf['nssai'].index(i) }}
-        sst: {{ i['sst'] }}
-        sd: {{ i['sd'] if 'sd' in i.keys() else 'FFFFFF' }}
+      {%- for i in conf['PLMN']['plmnInfo']%}
+      {%- for s in i['nssai']%}
+      - &slice_{{ i['nssai'].index(s) }}
+        sst: {{ s['sst'] }}
+        sd: {{ s['sd'] if 'sd' in s.keys() else 'FFFFFF' }}
+      {%- endfor %}
       {%- endfor %}
     ############## SBI Interfaces
     nfs:
@@ -186,7 +193,7 @@ data:
           api_version: v1
     ############## NF-specific configuration
     amf:
-      amf_name: "OAI-AMF"
+      amf_name: {{ conf['amfName'] }}
       # This really depends on if we want to keep the "mini" version or not
       support_features_options:
         enable_simple_scenario: no # "no" by default with the normal deployment scenarios with AMF/SMF/UPF/AUSF/UDM/UDR/NRF.
@@ -198,19 +205,23 @@ data:
       statistics_timer_interval: 20  # in seconds
       emergency_support: false
       served_guami_list:
-        - mcc: {{ conf['plmn']['mcc'] }}
-          mnc: {{ conf['plmn']['mnc'] }}
-          amf_region_id: 01
-          amf_set_id: 001
-          amf_pointer: 01
+      {%- for i in conf['ServedGUAMI']%}
+        - mcc: {{ i['plmnID']['mcc'] }}
+          mnc: {{ i['plmnID']['mnc'] }}
+          amf_region_id: {{ i['amfID']['amfRegionID'] }}
+          amf_set_id: {{ i['amfID']['amfSetID'] }}
+          amf_pointer: {{ i['amfID']['amfPointer'] }}
+      {%- endfor %}
       plmn_support_list:
-        - mcc: {{ conf['plmn']['mcc'] }}
-          mnc: {{ conf['plmn']['mnc'] }}
-          tac: {{ conf['plmn']['tac'] }}
+      {%- for i in conf['PLMN']['plmnInfo']%}
+        - mcc: {{ i['plmnID']['mcc'] }}
+          mnc: {{ i['plmnID']['mnc'] }}
+          tac: {{ i['tac'] }}
           nssai:
-            {%- for i in conf['nssai'] %}
-            - *slice_{{ conf['nssai'].index(i) }}
+            {%- for x in i['nssai'] %}
+            - *slice_{{ i['nssai'].index(x) }}
             {%- endfor %}
+      {%- endfor %}
       supported_integrity_algorithms:
         - "NIA1"
         - "NIA2"
@@ -241,12 +252,12 @@ spec:
       securityContext:
         runAsGroup: 0
         runAsUser: 0
-      # imagePullSecrets:
-      # - name: regcred
+      imagePullSecrets:
+      - name: regcred
       containers:
       - name: amf-controller
-        image: "hydrogen.local/oai-amf-controller:develop"
-        imagePullPolicy: IfNotPresent
+        image: "docker.io/arorasagar/oai-amf-controller:develop"
+        imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'
             value: 'amf'

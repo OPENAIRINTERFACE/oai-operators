@@ -1,39 +1,43 @@
-apiVersion: ref.nephio.org/v1alpha1
-kind: Config
-metadata:
-  name: upf-edge01-config
-  namespace: oai-upf
-spec:
-  config:
-    apiVersion: workload.nephio.org/v1alpha1
-    kind: UPFDeployment
-    metadata:
-      name: upf-edge01-config
-      namespace: oai-upf
-    spec:
-      logLevel: info
-      image: 'selfix.sboai.cs.eurecom.fr/oai-upf:ci-tmp-pr-16-4deecd64'
-      fqdn:
-        nrf: 'nrf-regional.oaicp.svc.cluster.local'
-        smf: 'smf-regional.oaicp.svc.cluster.local'
-      nssai:
-        - sst: 1
-          sd: '0xFFFFFF'
 ---
 apiVersion: workload.nephio.org/v1alpha1
-kind: UPFDeployment
+kind: NFConfig
 metadata:
-  name: upf-edge01
+  name: upf-edge-config
   namespace: oai-upf
 spec:
+  configRefs:
+    - apiVersion: cellular.nephio.org/v1alpha1
+      kind: PLMN
+      metadata:
+        name: oai-plmn
+      spec:
+        plmnInfo:
+          - plmnID:
+              mcc: "001"
+              mcc: "01"
+            tac: 1
+            nssai:
+              - sst: 1
+                sd: ffffff
+                dnnInfo:
+                  - name: internet
+                    sessionType: ipv4
+                    dns: 8.8.8.8
+---
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFDeployment
+metadata:
+  name: upf-edge
+  namespace: oai-upf
+spec:
+  provider: upf.openairinterface.org
   capacity:
     maxDownlinkThroughput: 5G
     maxUplinkThroughput: 5G
-  configRefs:
-  - name: upf-edge01-config
-    namespace: oai-upf
-    apiVersion: ref.nephio.org/v1alpha1
-    kind: Config
+  parametersRefs:
+  - name: upf-edge-config
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NFConfig
   interfaces:
   - name: n3
     ipv4:

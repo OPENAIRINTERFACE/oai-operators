@@ -17,7 +17,7 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  namespace: default
+  namespace: oaiops
   name: oai-udr-operator
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -31,12 +31,9 @@ rules:
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
-  # - apiGroups: ["workload.nephio.org"]
-  #   resources: [nfdeployments]
-  #   verbs: [list, watch]
   - apiGroups: ["workload.nephio.org"]
-    resources: [nfdeployments,nfdeployments/status]
-    verbs: [list, watch, update, patch]
+    resources: [nfdeployments,nfdeployments/status,nfconfigs]
+    verbs: [get,list, watch, update, patch]
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
@@ -67,13 +64,13 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: oai-udr-operator
-    namespace: default
+    namespace: oaiops
 ## In case you want to restrict to a namespace uncomment this role and remove the rights from cluster role
 #---
 # apiVersion: rbac.authorization.k8s.io/v1
 # kind: Role
 # metadata:
-#   namespace: default
+#   namespace: oaiops
 #   name: oai-udr-operator-role
 # rules:
 #   # Framework: posting the events about the handlers progress/errors.
@@ -93,7 +90,7 @@ subjects:
 # apiVersion: rbac.authorization.k8s.io/v1
 # kind: RoleBinding
 # metadata:
-#   namespace: default
+#   namespace: oaiops
 #   name: oai-udr-operator-rolebinding-namespaced
 # roleRef:
 #   apiGroup: rbac.authorization.k8s.io
@@ -107,6 +104,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: oai-udr-op-conf
+  namespace: oaiops
 data:
   udr.yaml: |
     ports:
@@ -125,7 +123,7 @@ data:
     logLevel: info
     image: 'docker.io/oaisoftwarealliance/oai-udr:develop'
     fqdn:
-      nrf: oai-nrf
+      nrf: nrf-core
     database:
       host: mysql
       type: mysql
@@ -137,6 +135,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: oai-udr-nf-conf
+  namespace: oaiops
 data:
   udr.yaml: |
     # Log level
@@ -144,7 +143,7 @@ data:
       udr: {{ conf['logLevel'] }}
     # If you enable registration, the NF will use the NRF discovery mechanism
     register_nf:
-      udr: {{ 'yes' if conf['communicationModel']['name'] == 'withNrf' else 'no' }}
+      udr: 'yes'
     http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
     ############## SBI Interfaces
     ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
@@ -176,6 +175,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: oai-udr-controller
+  namespace: oaiops
   labels:
     app.kubernetes.io/name: oai-udr
 spec:
@@ -197,8 +197,8 @@ spec:
       # - name: regcred
       containers:
       - name: udr-controller
-        image: "oai-udr-controller:develop"
-        imagePullPolicy: IfNotPresent
+        image: "docker.io/arorasagar/oai-udr-controller:develop"
+        imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'
             value: 'udr'
@@ -215,7 +215,7 @@ spec:
           - name: 'SVC_TYPE'
             value: 'LoadBalancer'
           - name: 'KUBERNETES_BASE_URL'
-            value: 'http://kubernetes.default.svc'
+            value: 'https://kubernetes.default.svc'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf

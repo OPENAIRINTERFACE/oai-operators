@@ -451,7 +451,7 @@ def create_svc(name: str=None,
     return {'creation_timestamp':creation_timestamp,'name':name}
 
 def get_param_ref(name: str=None, namespace: str=None,
-              logger=None):
+              logger=None, kind: str=None, apiVersion:str=None):
     '''
     :param name: name of the configmap
     :type name: str
@@ -459,15 +459,18 @@ def get_param_ref(name: str=None, namespace: str=None,
     :type namespace: str
     :param logger: logger
     :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
-    :param kopf: Instance of kopf
-    :return: status
-    :rtype: Boolean
+    :param kind: kind of the parameter ref
+    :type kind: string
+    :param apiVersion: apiVersion of the parameter ref
+    :type apiVersion: string
+    :return: Response
+    :rtype: dict
     '''
     headers = {"Content-type": "application/json",
         "Accept": "application/json",
         "Authorization": "Bearer {}".format(TOKEN)}
-    r = requests.get(f"{KUBERNETES_BASE_URL}/apis/ref.nephio.org/v1alpha1/namespaces/{namespace}/configs/{name}", headers=headers, verify=HTTPS_VERIFY)
-    logger.debug("Response of request to fetch config.req %s response %s" %(r.request.url, r.json()))
+    r = requests.get(f"{KUBERNETES_BASE_URL}/apis/{apiVersion}/namespaces/{namespace}/{kind}s/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of request to fetch {apiVersion} {r.request.url} response {r.json()}")
     if r.status_code==200:
         Response = {'status': True,'output':r.json()}
     elif r.status_code in [401,403]:
@@ -478,3 +481,4 @@ def get_param_ref(name: str=None, namespace: str=None,
         Response = {'status':False,'reason':r.json()}
 
     return Response
+    

@@ -1,42 +1,8 @@
-apiVersion: ref.nephio.org/v1alpha1
-kind: Config
-metadata:
-  name: udr-config
-  namespace: oaicp
-spec:
-  config:
-    apiVersion: workload.nephio.org/v1alpha1
-    kind: UDRDeployment
-    metadata:
-      name: udr-config
-      namespace: oaicp
-    spec:
-      logLevel: info
-      image: 'docker.io/oaisoftwarealliance/oai-udr:develop'
-      fqdn:
-        nrf: nrf-regional
-      database:
-        host: mysql
-        type: mysql
-        user: test
-        pass: test
-        connection_timeout: 300 # seconds
-      subscriberInformation:
-        encOpcKey: C42449363BBAD02B66D16BC975D77CC1 ## opc
-        encPermanentKey: fec86ba6eb707ed08905757b1bb44b8f # key
-        firstSUPI: 001010000000100 
-        plmn:
-          mcc: 001
-          mnc: 01
 ---
 apiVersion: workload.nephio.org/v1alpha1
-kind: UDRDeployment
+kind: NFDeployment
 metadata:
-  name: udr-regional
+  name: udr-core
   namespace: oaicp
 spec:
-  configRefs:
-  - name: udr-config
-    namespace: oaicp
-    apiVersion: ref.nephio.org/v1alpha1
-    kind: Config
+  provider: udr.openairinterface.org

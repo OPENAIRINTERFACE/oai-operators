@@ -1,44 +1,7 @@
 ---
-apiVersion: ref.nephio.org/v1alpha1
-kind: Config
-metadata:
-  name: common-core-ran-config
-spec:
-  config:
-    apiVersion: nfconfig.nephio.org/v1alpha1
-    kind: CommonCoreRANConfig
-    metadata:
-      name: common-core-ran
-      namespace: default
-    spec:
-      plmnInfo:
-        - mcc: "001"
-          mnc: "01"
-          tac: 1
-          nssai:
-            - sst: 1
-              sd: ffffff
-              dnnInfo:
-                - name: internet
-                  sessionType: ipv4
-                  dns: 8.8.8.8
-            - sst: 2
-              sd: ffffff
-              dnnInfo:
-                - name: internet
-                  sessionType: ipv4
-                  dns: 8.8.8.8
-      communicationModel: 
-        - name: woNrf
-          nrfUri: http://nrf-nnrf:8000
----
 apiVersion: workload.nephio.org/v1alpha1
 kind: NFDeployment
 metadata:
   name: oai-udr
 spec:
   provider: udr.openairinterface.org
-  parametersRefs:
-  - name: common-core-ran-config
-    apiVersion: ref.nephio.org/v1alpha1
-    kind: Config

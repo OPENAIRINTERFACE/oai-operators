@@ -5,60 +5,49 @@ metadata:
 spec:
   config: '{"cniVersion":"0.3.1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.2.2.254/24","gateway":"172.2.2.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
 ---
-apiVersion: ref.nephio.org/v1alpha1
-kind: Config
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFConfig
 metadata:
-  name: common-core-ran-config
+  name: oai-amf-config
+  labels:
+    provider: amf.openairinterface.org
 spec:
-  config:
-    apiVersion: nfconfig.nephio.org/v1alpha1
-    kind: CommonCoreRANConfig
-    metadata:
-      name: common-core-ran
-      namespace: default
-    spec:
-      plmnInfo:
-        - mcc: "001"
-          mnc: "01"
-          tac: 1
-          nssai:
-            - sst: 1
-              sd: ffffff
-              dnnInfo:
-                - name: internet
-                  sessionType: ipv4
-                  dns: 8.8.8.8
-            - sst: 2
-              sd: ffffff
-              dnnInfo:
-                - name: internet
-                  sessionType: ipv4
-                  dns: 8.8.8.8
-      communicationModel: 
-        - name: woNrf
-          nrfUri: http://nrf-nnrf:8000
----
-apiVersion: ref.nephio.org/v1alpha1
-kind: Config
-metadata:
-  name: amf-config
-spec:
-  config:
-    apiVersion: nfconfig.nephio.org/v1alpha1
-    kind: AmfConfig
-    metadata:
-      name: amf
-      namespace: default
-    spec:
-      amfName: amf
-      servedGuami:
-        - plmnId:
+  configRefs:
+    - apiVersion: cellular.nephio.org/v1alpha1
+      kind: PLMN
+      metadata:
+        name: oai-plmn
+      spec:
+        plmnInfo:
+          - plmnID:
+              mcc: "001"
+              mnc: "01"
+            tac: 1
+            nssai:
+              - sst: 1
+                sd: ffffff
+                dnnInfo:
+                  - name: internet
+                    sessionType: ipv4
+                    dns: 8.8.8.8
+              - sst: 2
+                sd: ffffff
+                dnnInfo:
+                  - name: internet
+                    sessionType: ipv4
+                    dns: 8.8.8.8
+    - apiVersion: cellular.nephio.org/v1alpha1
+      kind: ServedGUAMI
+      metadata:
+        name: oai-served-guami
+      spec:
+        - amfID:
+            amfPointer: '01'
+            amfRegionID: '01'
+            amfSetID: '001'
+          plmnID:
             mcc: "001"
             mnc: "01"
-          amfId:
-            amfRegionId: "01"
-            amfSetId: "001"
-            amfPointer: "01"
 ---
 apiVersion: workload.nephio.org/v1alpha1
 kind: NFDeployment
@@ -67,7 +56,7 @@ metadata:
 spec:
   provider: amf.openairinterface.org
   capacity:
-    maxSubscribers: 100
+    maxSubscribers: 200
   interfaces:
   - name: n2
     ipv4:
@@ -78,9 +67,6 @@ spec:
     interfaces:
     - n2
   parametersRefs:
-  - name: common-core-ran-config
-    apiVersion: ref.nephio.org/v1alpha1
-    kind: Config
-  - name: amf-config
-    apiVersion: ref.nephio.org/v1alpha1
-    kind: Config
+  - name: oai-amf-config
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NFConfig

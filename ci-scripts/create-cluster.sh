@@ -38,6 +38,8 @@ kubectl create -f `pwd`/ci-scripts/nad-test.yaml
 kubectl wait --for=condition=ready pod -l app=testmultus
 kubectl exec -it testpod -- ifconfig n3
 kubectl delete -f `pwd`/ci-scripts/nad-test.yaml
+#fetch the crds from nephio repository
+./ci-scripts/getcrd.sh
 kubectl create -f `pwd`/crd/
 nohup kubectl proxy --port 8080 &>/dev/null &
 echo "Cluster is properly configured and proxy is running at 8080"

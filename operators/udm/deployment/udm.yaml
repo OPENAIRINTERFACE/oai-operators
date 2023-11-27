@@ -31,12 +31,9 @@ rules:
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
-  # - apiGroups: ["workload.nephio.org"]
-  #   resources: [nfdeployments]
-  #   verbs: [list, watch]
   - apiGroups: ["workload.nephio.org"]
-    resources: [nfdeployments,nfdeployments/status]
-    verbs: [list, watch, update, patch]
+    resources: [nfdeployments,nfdeployments/status,nfconfigs]
+    verbs: [get,list, watch, update, patch]
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
@@ -138,7 +135,7 @@ data:
     log_level:
       udm: {{ conf['logLevel'] }}
     register_nf:
-      udm: {{ 'yes' if conf['communicationModel']['name'] == 'withNrf' else 'no' }}
+      udm: 'yes'
     http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
     ############## SBI Interfaces
     ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms

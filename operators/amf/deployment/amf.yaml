@@ -34,12 +34,9 @@ rules:
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
-  # - apiGroups: ["workload.nephio.org"]
-  #   resources: [nfdeployments]
-  #   verbs: [list, watch]
   - apiGroups: ["workload.nephio.org"]
-    resources: [nfdeployments,nfdeployments/status]
-    verbs: [list, watch, update, patch]
+    resources: [nfdeployments,nfdeployments/status,nfconfigs]
+    verbs: [get, list, watch, update, patch]
   - apiGroups: [""]
     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
     verbs:  [get, list, watch, create, update, patch, delete]
@@ -143,95 +140,93 @@ kind: ConfigMap
 metadata:
   name: oai-amf-nf-conf
 data:
-  config.yaml: |
-  # Log level for all the NFs
-  log_level:
-    amf: {{ conf['logLevel'] }}
-  # If you enable registration, the other NFs will use the NRF discovery mechanism
-  register_nf:
-    amf: {{ 'yes' if conf['communicationModel']['name'] == 'withNrf' else 'no' }}
-  http_version: 2
-
-  ## general single_nssai configuration
-  ## Defines YAML anchors, which are reused in the config file
-  snssais:
-    {%- for i in conf['plmnInfo']%}
-    {%- for s in i['nssai']%}
-    - &slice_{{ i['nssai'].index(s) }}
-      sst: {{ s['sst'] }}
-      sd: {{ s['sd'] if 'sd' in s.keys() else 'FFFFFF' }}
-    {%- endfor %}
-    {%- endfor %}
-  ############## SBI Interfaces
-  nfs:
+  amf.yaml: |
+    # Log level for all the NFs
+    log_level:
+      amf: {{ conf['logLevel'] }}
+    # If you enable registration, the other NFs will use the NRF discovery mechanism
+    register_nf:
+      amf: yes
+    http_version: 2
+    ## general single_nssai configuration
+    ## Defines YAML anchors, which are reused in the config file
+    snssais:
+      {%- for i in conf['PLMN']['plmnInfo']%}
+      {%- for s in i['nssai']%}
+      - &slice_{{ i['nssai'].index(s) }}
+        sst: {{ s['sst'] }}
+        sd: {{ s['sd'] if 'sd' in s.keys() else 'FFFFFF' }}
+      {%- endfor %}
+      {%- endfor %}
+    ############## SBI Interfaces
+    nfs:
+      amf:
+        host: {{ conf['fqdn']['amf'] }}  #will be replaced by service name
+        sbi:
+          port: 80
+          api_version: v1
+          interface_name: {{ conf['nfInterfaces']['sbi'] }}
+        n2:
+          interface_name: {{ conf['nfInterfaces']['n2'] }}
+          port: 38412
+      smf:
+        host: {{ conf['fqdn']['smf'] }}
+        sbi:
+          port: 80
+          api_version: v1
+      udm:
+        host: {{ conf['fqdn']['udm'] }}
+        sbi:
+          port: 80
+          api_version: v1
+      ausf:
+        host: {{ conf['fqdn']['ausf'] }}
+        sbi:
+          port: 80
+          api_version: v1
+      nrf:
+        host: {{ conf['fqdn']['nrf'] }}
+        sbi:
+          port: 80
+          api_version: v1
+    ############## NF-specific configuration
     amf:
-      host: {{ conf['fqdn']['amf'] }}  #will be replaced by service name
-      sbi:
-        port: 80
-        api_version: v1
-        interface_name: {{ conf['nfInterfaces']['sbi'] }}
-      n2:
-        interface_name: {{ conf['nfInterfaces']['n2'] }}
-        port: 38412
-    smf:
-      host: {{ conf['fqdn']['smf'] }}
-      sbi:
-        port: 80
-        api_version: v1
-    udm:
-      host: {{ conf['fqdn']['udm'] }}
-      sbi:
-        port: 80
-        api_version: v1
-    ausf:
-      host: {{ conf['fqdn']['ausf'] }}
-      sbi:
-        port: 80
-        api_version: v1
-    nrf:
-      host: {{ conf['fqdn']['nrf'] }}
-      sbi:
-        port: 80
-        api_version: v1
-
-  ############## NF-specific configuration
-  amf:
-    amf_name: {{ conf['amfName'] }}
-    # This really depends on if we want to keep the "mini" version or not
-    support_features_options:
-      enable_simple_scenario: no # "no" by default with the normal deployment scenarios with AMF/SMF/UPF/AUSF/UDM/UDR/NRF.
-                                 # set it to "yes" to use with the minimalist deployment scenario (including only AMF/SMF/UPF) by using the internal AUSF/UDM implemented inside AMF.
-                                 # There's no NRF in this scenario, SMF info is taken from "nfs" section.
-      enable_nssf: no
-      enable_smf_selection: {{ 'yes' if conf['communicationModel']['name'] == 'withNrf' else 'no' }}
-    relative_capacity: 30
-    statistics_timer_interval: 20  # in seconds
-    emergency_support: false
-    served_guami_list:
-    {%- for i in conf['servedGuami']%}
-      - mcc: {{ i['plmnId']['mcc'] }}
-        mnc: {{ i['plmnId']['mnc'] }}
-        amf_region_id: {{ i['amfId']['amfRegionId'] }}
-        amf_set_id: {{ i['amfId']['amfSetId'] }}
-        amf_pointer: {{ i['amfId']['amfPointer'] }}
-    {%- endfor %}
-    plmn_support_list:
-    {%- for i in conf['plmnInfo']%}
-      - mcc: {{ i['mcc'] }}
-        mnc: {{ i['mnc'] }}
-        tac: {{ i['tac'] }}
-        nssai:
-          {%- for x in i['nssai'] %}
-          - *slice_{{ i['nssai'].index(x) }}
-          {%- endfor %}
-    {%- endfor %}
-    supported_integrity_algorithms:
-      - "NIA1"
-      - "NIA2"
-    supported_encryption_algorithms:
-      - "NEA0"
-      - "NEA1"
-      - "NEA2"
+      amf_name: {{ conf['amfName'] }}
+      # This really depends on if we want to keep the "mini" version or not
+      support_features_options:
+        enable_simple_scenario: no # "no" by default with the normal deployment scenarios with AMF/SMF/UPF/AUSF/UDM/UDR/NRF.
+                                   # set it to "yes" to use with the minimalist deployment scenario (including only AMF/SMF/UPF) by using the internal AUSF/UDM implemented inside AMF.
+                                   # There's no NRF in this scenario, SMF info is taken from "nfs" section.
+        enable_nssf: no
+        enable_smf_selection: yes
+      relative_capacity: 30
+      statistics_timer_interval: 20  # in seconds
+      emergency_support: false
+      served_guami_list:
+      {%- for i in conf['ServedGUAMI']%}
+        - mcc: {{ i['plmnID']['mcc'] }}
+          mnc: {{ i['plmnID']['mnc'] }}
+          amf_region_id: {{ i['amfID']['amfRegionID'] }}
+          amf_set_id: {{ i['amfID']['amfSetID'] }}
+          amf_pointer: {{ i['amfID']['amfPointer'] }}
+      {%- endfor %}
+      plmn_support_list:
+      {%- for i in conf['PLMN']['plmnInfo']%}
+        - mcc: {{ i['plmnID']['mcc'] }}
+          mnc: {{ i['plmnID']['mnc'] }}
+          tac: {{ i['tac'] }}
+          nssai:
+            {%- for x in i['nssai'] %}
+            - *slice_{{ i['nssai'].index(x) }}
+            {%- endfor %}
+      {%- endfor %}
+      supported_integrity_algorithms:
+        - "NIA1"
+        - "NIA2"
+      supported_encryption_algorithms:
+        - "NEA0"
+        - "NEA1"
+        - "NEA2"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -258,7 +253,8 @@ spec:
       - name: regcred
       containers:
       - name: amf-controller
-        image: "oai-amf-controller:develop"
+        image: "docker.io/arorasagar/oai-amf-controller:develop"
+#        command: ["sleep","10000"]
         imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'
@@ -274,7 +270,7 @@ spec:
           - name: 'TESTING'
             value: 'yes'
           - name: 'KUBERNETES_BASE_URL'
-            value: 'http://kubernetes.default.svc'
+            value: 'https://kubernetes.default.svc'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf
@@ -287,12 +283,12 @@ spec:
           limits:
             memory: "256Mi"
             cpu: "100m"
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8080
-          initialDelaySeconds: 2
-          periodSeconds: 5
+        # livenessProbe:
+        #   httpGet:
+        #     path: /healthz
+        #     port: 8080
+        #   initialDelaySeconds: 2
+        #   periodSeconds: 5
       volumes:
       - configMap:
           name: oai-amf-op-conf

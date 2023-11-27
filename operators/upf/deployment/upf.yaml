@@ -31,12 +31,9 @@ rules:
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
-  # - apiGroups: ["workload.nephio.org"]
-  #   resources: [nfdeployments]
-  #   verbs: [list, watch]
   - apiGroups: ["workload.nephio.org"]
-    resources: [nfdeployments,nfdeployments/status]
-    verbs: [list, watch, update, patch]
+    resources: [nfdeployments,nfdeployments/status,nfconfigs]
+    verbs: [get,list, watch, update, patch]
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
@@ -153,12 +150,12 @@ data:
       upf: {{ conf['logLevel'] }}
     # If you enable registration, the other NFs will use the NRF discovery mechanism
     register_nf:
-      upf: {{ 'yes' if conf['communicationModel']['name'] == 'withNrf' else 'no' }}
+      upf: 'yes'
     http_version: 2
     ## general single_nssai configuration
     ## Defines YAML anchors, which are reused in the config file
     snssais:
-      {%- for i in conf['plmnInfo']%}
+      {%- for i in conf['PLMN']['plmnInfo']%}
       {%- for s in i['nssai']%}
       - &slice_{{ i['nssai'].index(s) }}
         sst: {{ s['sst'] }}
@@ -205,23 +202,23 @@ data:
       remote_n6_gw: localhost      # Dummy host since simple-switch does not use N6 GW
       upf_info:
         sNssaiUpfInfoList:
-        {%- for i in conf['plmnInfo']%}
-        {%- for s in i['nssai']%}
-        - sNssai: *slice_{{ i['nssai'].index(s) }}
-          dnnUpfInfoList:
-        {%- for d in i['dnnInfo'] %}
+          {%- for i in conf['PLMN']['plmnInfo'] %}
+          {%- for x in i['nssai'] %}
+          - sNssai: *slice_{{ i['nssai'].index(x) }}
+            dnnUpfInfoList:
+          {%- for d in x['dnnInfo'] %}
               - dnn: {{ d['name'] }}
-        {%- endfor %}
-        {%- endfor %}
-        {%- endfor %}
+          {%- endfor %}
+          {%- endfor %}
+          {%- endfor %}
     ## DNN configuration
     dnns:
-      {%- for i in conf['plmnInfo']%}
-      {%- for s in i['nssai']%}
-      {%- for d in i['dnnInfo'] %}
-      - dnn: {{ d['name'] }}
-        pdu_session_type: IPV4
-        ipv4_subnet: {{ d['subnet'] }}
+      {%- for i in conf['PLMN']['plmnInfo'] %}
+      {%- for x in i['nssai'] %}
+      {%- for d in x['dnnInfo'] %}
+      - dnn: "{{ d['name'] }}"
+        pdu_session_type: "IPV4"
+        ipv4_subnet: "{{ d['subnet'] }}"
       {%- endfor %}
       {%- endfor %}
       {%- endfor %}
@@ -231,18 +228,18 @@ kind: Deployment
 metadata:
   name: oai-upf-controller
   labels:
-    app.kubernetes.io/name: oai-upf-controller
+    app.kubernetes.io/name: oai-upf
 spec:
   replicas: 1
   selector:
     matchLabels:
-      app.kubernetes.io/name: oai-upf-controller
+      app.kubernetes.io/name: oai-upf
   strategy:
     type: Recreate
   template:
     metadata:
       labels:
-        app.kubernetes.io/name: oai-upf-controller
+        app.kubernetes.io/name: oai-upf
     spec:
       securityContext:
         runAsGroup: 0
@@ -251,7 +248,7 @@ spec:
       - name: regcred
       containers:
       - name: upf-controller
-        image: "oai-upf-controller:develop"
+        image: "docker.io/arorasagar/oai-upf-controller:develop"
         imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'

@@ -17,7 +17,7 @@
 apiVersion: v1
 kind: ServiceAccount
 metadata:
-  namespace: default
+  namespace: oaiops
   name: oai-nrf-operator
 ---
 apiVersion: rbac.authorization.k8s.io/v1
@@ -31,12 +31,9 @@ rules:
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
-  # - apiGroups: ["workload.nephio.org"]
-  #   resources: [nfdeployments]
-  #   verbs: [list, watch]
   - apiGroups: ["workload.nephio.org"]
-    resources: [nfdeployments,nfdeployments/status]
-    verbs: [list, watch, update, patch]
+    resources: [nfdeployments,nfdeployments/status,nfconfigs]
+    verbs: [get,list, watch, update, patch]
   - apiGroups: ["ref.nephio.org"]
     resources: [configs,config]
     verbs: [list, watch, update, patch, get]
@@ -67,13 +64,13 @@ roleRef:
 subjects:
   - kind: ServiceAccount
     name: oai-nrf-operator
-    namespace: default
+    namespace: oaiops
 ## In case you want to restrict to a namespace uncomment this role and remove the rights from cluster role
 #---
 # apiVersion: rbac.authorization.k8s.io/v1
 # kind: Role
 # metadata:
-#   namespace: default
+#   namespace: oaiops
 #   name: oai-nrf-operator-role
 # rules:
 #   # Framework: posting the events about the handlers progress/errors.
@@ -81,7 +78,7 @@ subjects:
 #     resources: [events]
 #     verbs: [create]
 #   - apiGroups: ["workload.nephio.org"]
-#     resources: [nrfdeployments,nrfdeployments/status]
+#     resources: [nfdeployments,nfdeployments/status]
 #     verbs: [list, watch, update, patch]
 #   - apiGroups: [""]
 #     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
@@ -93,7 +90,7 @@ subjects:
 # apiVersion: rbac.authorization.k8s.io/v1
 # kind: RoleBinding
 # metadata:
-#   namespace: default
+#   namespace: oaiops
 #   name: oai-nrf-operator-rolebinding-namespaced
 # roleRef:
 #   apiGroup: rbac.authorization.k8s.io
@@ -107,6 +104,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: oai-nrf-op-conf
+  namespace: oaiops
 data:
   nrf.yaml: |
     nfInterfaces:
@@ -135,6 +133,7 @@ apiVersion: v1
 kind: ConfigMap
 metadata:
   name: oai-nrf-nf-conf
+  namespace: oaiops
 data:
   nrf.yaml: |
     ############# Common configuration
@@ -159,6 +158,7 @@ apiVersion: apps/v1
 kind: Deployment
 metadata:
   name: oai-nrf-controller
+  namespace: oaiops
   labels:
     app.kubernetes.io/name: oai-nrf
 spec:
@@ -180,8 +180,8 @@ spec:
       - name: regcred
       containers:
       - name: nrf-controller
-        image: "oai-nrf-controller:develop"
-        imagePullPolicy: IfNotPresent
+        image: "docker.io/arorasagar/oai-nrf-controller:develop"
+        imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'
             value: 'nrf'
@@ -194,7 +194,7 @@ spec:
           - name: 'OP_CONF_PATH'
             value: '/tmp/op/nrf.yaml'
           - name: 'KUBERNETES_BASE_URL'
-            value: 'http://kubernetes.default.svc'
+            value: 'https://kubernetes.default.svc'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf

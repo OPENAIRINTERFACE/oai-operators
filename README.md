@@ -136,11 +136,11 @@ To deploy the whole core network
 kubectl -f crd/
 ```
 
-2. Deploy the operator in any namespace you want. Here we will deploy in `oai` namespace. 
+2. Deploy the operator in any namespace you want. Here we will deploy in `oaiops` namespace. 
 
 ```bash
-kube create ns oai
-kubectl create -f oai5gcore/controllerdeploy/ -n oai
+kube create ns oaiops
+kubectl create -f oai5gcore/controllerdeploy/
 ```
 
 3. At the moment AMF and UPF custom resource requires network attachment defination so before creating the custom resource we need to define NAD in a namespace. Here we will use `oai5g` namespace. 
@@ -155,34 +155,40 @@ kubectl create -f oai5gcore/nad/
 helm install mysql helm-charts/mysql -n oai5g
 ```
 
-5. Create the custom resources for control plane network functions
+5. Create the custom resources for all core network functions
 
 ```bash
-kubectl create -f oai5gcore/nfdeploy/amfdeploy.yaml
-kubectl create -f oai5gcore/nfdeploy/nrfdeploy.yaml
-kubectl create -f oai5gcore/nfdeploy/ausfdeploy.yaml
-kubectl create -f oai5gcore/nfdeploy/udrdeploy.yaml
-kubectl create -f oai5gcore/nfdeploy/udmdeploy.yaml
-kubectl create -f oai5gcore/nfdeploy/smfdeploy.yaml
+kubectl create -f oai5gcore/nfdeploy/
 ```
 
-6. Create the custom resources for user plane network functions
+6. Most probably you will have a core network configured.
 
-In this deployment setting UPF is sending PFCP request to SMF. UPF requires `configs.ref.nephio.org` resource to fetch the ip-address of SMF. The below yaml files will also create `configs.ref.nephio.org` resource for each upf. 
+7. Test the core network with gNB and UE you can do 
 
 ```bash
-kubectl create -f oai5gcore/nfdeploy/upfdeploy-edge01.yaml
-kubectl create -f oai5gcore/nfdeploy/upfdeploy-edge02.yaml
+## Deploy gNB
+helm install gnb helm-charts/oai-gnb
+sleep 10
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=oai-gnb --timeout=5m
+## Deploy NR-UE
+helm install nrue helm-charts/oai-nr-ue
+sleep 10
+kubectl wait --for=condition=ready pod -l app.kubernetes.io/name=oai-nr-ue --timeout=5m
+sleep 20
 ```
 
-7. Most probably you will have a core network configured.
+8. Check if the UE is connected and then ping
 
+```bash
+## Check if the UE connects via looking at tunnel interface
+kubectl exec -it $(kubectl get pods  -l app.kubernetes.io/name=oai-nr-ue | grep nr-ue | awk '{print $1}') -- ifconfig oaitun_ue1
+## ping if it is connected
+kubectl exec -it $(kubectl get pods  -l app.kubernetes.io/name=oai-nr-ue | grep nr-ue | awk '{print $1}') -- ping -I oaitun_ue1 10.1.0.1 -c 4
+```
 
 ## Create A Minikube Cluster (An example)
 
-At the moment in the docker based minikube multus CNI does not work properly so it is good to use VM based minikube. In VM based minikube we have problems with running `oai-gnb` and `oai-nr-ue` in RFsimulated mode because of the base operating system of minikube VM. 
-
-In case you want to test end to end then you have to run `oai-gnb` and `oai-nr-ue` in another cluster or environment. If you just want to use core network operators then you can use minikube. 
+In VM based minikube we have problems with running `oai-gnb` and `oai-nr-ue` in RFsimulated mode because of the base operating system of minikube VM. 
 
 ```shell
 minikube delete
@@ -195,6 +201,22 @@ minikube addons enable metallb
 ## Configure metallb in the range you want it will be required by NRF.
 # Enable the metrics server (optional)
 minikube addons enable metrics-server
+```
+
+You can also refer to `./ci-scripts/create-cluster.sh` script.
+
+## End to end test (For testing purpose)
+
+For end to end test the script requires
+
+1. 4 CPU and 16GB RAM
+2. Name of the controller image tag for example: develop
+3. Name of the parent repository for pushing the images
+4. (Optional) User name of the parent repository for pushing the image
+5. (Optional) Password of the parent repository to push the image
+
+```bash
+time ./ci-scripts/test-end-to-end.sh $TAG $PARENT $USER $PASS
 ```
 
 # Contribution requests
