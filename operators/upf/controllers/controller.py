@@ -121,7 +121,7 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
         rules = [
                     {
                       "apiGroups": ["security.openshift.io"],
-                      "resourceNames": ["anyuid"],
+                      "resourceNames": ["privileged"],
                       "resources": ["securitycontextconstraints"],
                       "verbs": ["use"]
                     }
@@ -271,7 +271,7 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
         rules = [
                     {
                       "apiGroups": ["security.openshift.io"],
-                      "resourceNames": ["anyuid"],
+                      "resourceNames": ["privileged"],
                       "resources": ["securitycontextconstraints"],
                       "verbs": ["use"]
                     }
@@ -452,7 +452,7 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
         rules = [
                     {
                       "apiGroups": ["security.openshift.io"],
-                      "resourceNames": ["anyuid"],
+                      "resourceNames": ["privileged"],
                       "resources": ["securitycontextconstraints"],
                       "verbs": ["use"]
                     }

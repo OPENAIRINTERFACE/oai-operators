@@ -309,3 +309,4 @@ spec:
       restartPolicy: Always
       serviceAccountName: oai-amf-operator
       terminationGracePeriodSeconds: 5
+      
