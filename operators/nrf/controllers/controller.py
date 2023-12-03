@@ -53,7 +53,7 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
     nf_ports = conf['ports']
-    svc_status = create_svc(name=kwargs['body']['metadata']['name'], 
+    svc_status = create_svc(name=f"oai-{NF_TYPE}",#kwargs['body']['metadata']['name'],
                           namespace=namespace,
                           labels=LABEL,
                           logger=logger,
@@ -146,12 +146,12 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
         api = kubernetes.client.CoreV1Api()
         obj = api.read_namespaced_service(
             namespace=namespace,
-            name=kwargs['body']['metadata']['name']
+            name=f"oai-{NF_TYPE}"
             ).to_dict()
         svc_status = obj['metadata']
     except ApiException as e:
         if e.status == 404:
-            svc_status = create_svc(name=kwargs['body']['metadata']['name'], 
+            svc_status = create_svc(name=f"oai-{NF_TYPE}",#kwargs['body']['metadata']['name'],
                                   namespace=namespace,
                                   labels=LABEL,
                                   logger=logger,
@@ -288,7 +288,7 @@ def delete_fn(spec, name, namespace, logger, **kwargs):
         api = kubernetes.client.CoreV1Api()
         obj = api.delete_namespaced_service(
                 namespace=namespace,
-                name=name,
+                name=f"oai-{NF_TYPE}",
             )
         logger.debug(f"Service deleted for network function: {name} from namespace: {namespace}")
     except ApiException as e:
@@ -356,12 +356,12 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
         api = kubernetes.client.CoreV1Api()
         obj = api.read_namespaced_service(
             namespace=namespace,
-            name=kwargs['body']['metadata']['name']
+            name=f"oai-{NF_TYPE}"
             ).to_dict()
         svc_status = obj['metadata']
     except ApiException as e:
         if e.status == 404:
-            svc_status = create_svc(name=kwargs['body']['metadata']['name'], 
+            svc_status = create_svc(name=f"oai-{NF_TYPE}",#kwargs['body']['metadata']['name'],
                                   namespace=namespace,
                                   labels=LABEL,
                                   logger=logger,

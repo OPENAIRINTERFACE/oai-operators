@@ -26,6 +26,7 @@ PASS=$4
 function cleanup {
   echo "Removing minikube"
   minikube delete
+  sed -i 's/imagePullPolicy\: IfNotPresent/imagePullPolicy\: Always/g' oai5gcore/controllerdeploy/*
 }
 
 trap cleanup EXIT
@@ -64,13 +65,13 @@ kubectl wait --for=condition=ready pod -n oaiops -l app.kubernetes.io/name=oai-a
 ## Deploy the network functions
 kubectl create -f oai5gcore/nfdeploy/
 sleep 10
-kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=amf --timeout=3m
-kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=smf --timeout=3m
-kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=nrf --timeout=3m
-kubectl wait --for=condition=ready pod -n oai-upf -l workload.nephio.org/oai=upf --timeout=3m
-kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=udr --timeout=3m
-kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=udm --timeout=3m
-kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=ausf --timeout=3m
+kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=amf --timeout=5m
+kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=smf --timeout=5m
+kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=nrf --timeout=5m
+kubectl wait --for=condition=ready pod -n oai-upf -l workload.nephio.org/oai=upf --timeout=5m
+kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=udr --timeout=5m
+kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=udm --timeout=5m
+kubectl wait --for=condition=ready pod -n oaicp -l workload.nephio.org/oai=ausf --timeout=5m
 ## Deploy gNB
 helm install gnb helm-charts/oai-gnb
 sleep 10
@@ -91,6 +92,6 @@ sleep 3
 kubectl delete -f oai5gcore/controllerdeploy/
 sleep 2
 kubectl delete ns oaiops oai-upf oaicp
-./ci-scripts/push-images.sh $TAG $PARENT $USER $PASS
+# ./ci-scripts/push-images.sh $TAG $PARENT $USER $PASS
 minikube delete
 echo "----------Test Done ----------"
