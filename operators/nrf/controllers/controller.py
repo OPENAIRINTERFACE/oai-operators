@@ -91,7 +91,26 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                           labels=LABEL,
                           logger=logger,
                           kopf=kopf)
-
+    if KUBERNETES_TYPE == 'openshift':
+        rules = [
+                    {
+                      "apiGroups": ["security.openshift.io"],
+                      "resourceNames": ["anyuid"],
+                      "resources": ["securitycontextconstraints"],
+                      "verbs": ["use"]
+                    }
+                ]
+        role_status = create_role(name=kwargs['body']['metadata']['name'], namespace=namespace, 
+                                  logger=logger,
+                                  labels=LABEL,
+                                  rules=rules)
+        if role_status['status']:
+            role_binding_status = create_role_binding(name=kwargs['body']['metadata']['name'],
+                                                      namespace=namespace,
+                                                      sa_name=sa_status['name'],
+                                                      role_name=kwargs['body']['metadata']['name'],
+                                                      logger=logger,
+                                                      labels=LABEL)
     deployment = create_deployment(name=kwargs['body']['metadata']['name'],
                                    namespace=namespace,
                                    compute=nf_resources, 
@@ -195,7 +214,26 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                                   logger=logger,
                                   kopf=kopf)
             sa_name = sa_status['name']
-
+    if KUBERNETES_TYPE == 'openshift' and not get_role(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+        rules = [
+                    {
+                      "apiGroups": ["security.openshift.io"],
+                      "resourceNames": ["anyuid"],
+                      "resources": ["securitycontextconstraints"],
+                      "verbs": ["use"]
+                    }
+                ]
+        role_status = create_role(name=kwargs['body']['metadata']['name'], namespace=namespace, 
+                                  logger=logger,
+                                  labels=LABEL,
+                                  rules=rules)
+    if KUBERNETES_TYPE == 'openshift' and not get_role_binding(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+        role_binding_status = create_role_binding(name=kwargs['body']['metadata']['name'],
+                                                  namespace=namespace,
+                                                  sa_name=sa_name,
+                                                  role_name=kwargs['body']['metadata']['name'],
+                                                  logger=logger,
+                                                  labels=LABEL)
     #fetch the current deployment
     try:
         api = kubernetes.client.AppsV1Api()
@@ -283,6 +321,11 @@ def delete_fn(spec, name, namespace, logger, **kwargs):
     except ApiException as e:
         logger.debug(f"Exception {e} while deleting the ServiceAccount for network function: {name} from namespace: {namespace}")
 
+    if KUBERNETES_TYPE == 'openshift' and get_role(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+        delete_role(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)
+        if get_role_binding(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+            delete_role_binding(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)
+
     #Delete svc
     try:
         api = kubernetes.client.CoreV1Api()
@@ -339,7 +382,26 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
                                   logger=logger,
                                   kopf=kopf)
             sa_name = sa_status['name']
-
+    if KUBERNETES_TYPE == 'openshift' and not get_role(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+        rules = [
+                    {
+                      "apiGroups": ["security.openshift.io"],
+                      "resourceNames": ["anyuid"],
+                      "resources": ["securitycontextconstraints"],
+                      "verbs": ["use"]
+                    }
+                ]
+        role_status = create_role(name=kwargs['body']['metadata']['name'], namespace=namespace, 
+                                  logger=logger,
+                                  labels=LABEL,
+                                  rules=rules)
+    if KUBERNETES_TYPE == 'openshift' and not get_role_binding(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+        role_binding_status = create_role_binding(name=kwargs['body']['metadata']['name'],
+                                                  namespace=namespace,
+                                                  sa_name=sa_name,
+                                                  role_name=kwargs['body']['metadata']['name'],
+                                                  logger=logger,
+                                                  labels=LABEL)
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     conf.update({
                 'maxSubscribers': spec.get('maxSubscribers',1000),

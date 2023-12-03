@@ -45,7 +45,7 @@ rules:
     resources: [nfdeployments,nfdeployments/status,nfconfigs,nfdeployments/finalizers]
     verbs: [get, list, watch, update, patch]
   - apiGroups: [""]
-    resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims,services/finalizers,serviceaccounts/finalizers]
+    resources: [pods, serviceaccounts, configmaps, services,services/finalizers,serviceaccounts/finalizers]
     verbs:  [get, list, watch, create, update, patch, delete]
   - apiGroups: ["apps","extensions"]
     resources: [deployments,deployments/status,deployments/finalizers]
