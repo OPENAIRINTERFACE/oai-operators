@@ -28,6 +28,9 @@ import sys
 requests.packages.urllib3.disable_warnings() 
 
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+KUBERNETES_TYPE=str(os.getenv('KUBERNETES_TYPE','vanilla')).lower()    ##Allowed values VANILLA/Openshift
+if KUBERNETES_TYPE not in ['vanilla','openshift']:
+    print('Allowed values for kubernetes type are vanilla/openshift')
 NF_TYPE=str(os.getenv('NF_TYPE','nrf'))      ## Network function name
 LABEL={'workload.nephio.org/oai': f"{NF_TYPE}"}   ## Labels to put inside the owned resources
 OP_CONF_PATH=str(os.getenv('OP_CONF_PATH',f"/tmp/op/{NF_TYPE}.yaml"))  ## Operators configuration file

@@ -20,7 +20,7 @@ metadata:
   name: upf-edge-n3
   namespace: oai-upf
 spec:
-  config: '{"cniVersion":"0.3.1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.3.0.254/24","gateway":"172.3.0.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
+  config: '{"cniVersion":"0.3.1","name":"upf-edge-n3","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.3.0.254/24","gateway":"172.3.0.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
 ---
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
@@ -28,7 +28,7 @@ metadata:
   name: upf-edge-n4
   namespace: oai-upf
 spec:
-  config: '{"cniVersion":"0.3.1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.1.1.253/24","gateway":"172.1.1.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
+  config: '{"cniVersion":"0.3.1","name":"upf-edge-n4","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.1.1.253/24","gateway":"172.1.1.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
 ---
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
@@ -36,4 +36,4 @@ metadata:
   name: upf-edge-n6
   namespace: oai-upf
 spec:
-  config: '{"cniVersion":"0.3.1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.0.1.254/24","gateway":"172.0.1.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
+  config: '{"cniVersion":"0.3.1","name":"upf-edge-n6","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.0.1.254/24","gateway":"172.0.1.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'

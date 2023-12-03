@@ -75,7 +75,7 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
         logger.error(f"Exception with reason {e}, in patching {name} in namespace {namespace}")
         raise kopf.PermanentError(f"Exception with reason {e}, in patching {name} in namespace {namespace}")
 
-    svc_status = create_svc(name=kwargs['body']['metadata']['name'], 
+    svc_status = create_svc(name=f"oai-{NF_TYPE}",#kwargs['body']['metadata']['name'],
                           namespace=namespace,
                           labels=LABEL,
                           logger=logger,
@@ -100,18 +100,37 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
                           labels=LABEL,
                           logger=logger,
                           kopf=kopf)
-
+    if KUBERNETES_TYPE == 'openshift':
+        rules = [
+                    {
+                      "apiGroups": ["security.openshift.io"],
+                      "resourceNames": ["anyuid"],
+                      "resources": ["securitycontextconstraints"],
+                      "verbs": ["use"]
+                    }
+                ]
+        role_status = create_role(name=kwargs['body']['metadata']['name'], namespace=namespace, 
+                                  logger=logger,
+                                  labels=LABEL,
+                                  rules=rules)
+        if role_status['status']:
+            role_binding_status = create_role_binding(name=kwargs['body']['metadata']['name'],
+                                                      namespace=namespace,
+                                                      sa_name=sa_status['name'],
+                                                      role_name=kwargs['body']['metadata']['name'],
+                                                      logger=logger,
+                                                      labels=LABEL)
     deployment = create_deployment(name=kwargs['body']['metadata']['name'],
                                    namespace=namespace,
                                    compute=nf_resources, 
                                    labels= LABEL,
                                    nrf_svc=nrf_svc,
-                                   db_user=conf['database']['user'],
-                                   db_pass=conf['database']['pass'],
-                                   db_host=conf['database']['host'],
                                    image=conf['image'],
                                    image_pull_secrets=conf['imagePullSecrets'], 
                                    ports=nf_ports,
+                                   db_user=conf['database']['user'],
+                                   db_pass=conf['database']['pass'],
+                                   db_host=conf['database']['host'],
                                    config_map=cm_status['name'], 
                                    sa_name=sa_status['name'],
                                    nf_type=NF_TYPE,
@@ -163,12 +182,12 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
         api = kubernetes.client.CoreV1Api()
         obj = api.read_namespaced_service(
             namespace=namespace,
-            name=kwargs['body']['metadata']['name']
+            name=f"oai-{NF_TYPE}"
             ).to_dict()
         svc_status = obj['metadata']
     except ApiException as e:
         if e.status == 404:
-            svc_status = create_svc(name=kwargs['body']['metadata']['name'], 
+            svc_status = create_svc(name=f"oai-{NF_TYPE}",#kwargs['body']['metadata']['name'],
                                   namespace=namespace,
                                   labels=LABEL,
                                   logger=logger,
@@ -214,6 +233,26 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                                   kopf=kopf)
             sa_name = sa_status['name']
 
+    if KUBERNETES_TYPE == 'openshift' and not get_role(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+        rules = [
+                    {
+                      "apiGroups": ["security.openshift.io"],
+                      "resourceNames": ["anyuid"],
+                      "resources": ["securitycontextconstraints"],
+                      "verbs": ["use"]
+                    }
+                ]
+        role_status = create_role(name=kwargs['body']['metadata']['name'], namespace=namespace, 
+                                  logger=logger,
+                                  labels=LABEL,
+                                  rules=rules)
+    if KUBERNETES_TYPE == 'openshift' and not get_role_binding(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+        role_binding_status = create_role_binding(name=kwargs['body']['metadata']['name'],
+                                                  namespace=namespace,
+                                                  sa_name=sa_name,
+                                                  role_name=kwargs['body']['metadata']['name'],
+                                                  logger=logger,
+                                                  labels=LABEL)
     #fetch the current deployment
     try:
         api = kubernetes.client.AppsV1Api()
@@ -237,10 +276,10 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                                            labels= LABEL,
                                            image=conf['image'],
                                            nrf_svc=nrf_svc,
+                                           image_pull_secrets=conf['imagePullSecrets'], 
                                            db_user=conf['database']['user'],
                                            db_pass=conf['database']['pass'],
                                            db_host=conf['database']['host'],
-                                           image_pull_secrets=conf['imagePullSecrets'], 
                                            ports=nf_ports,
                                            config_map=cm_name, 
                                            sa_name=sa_name,
@@ -304,12 +343,17 @@ def delete_fn(spec, name, namespace, logger, **kwargs):
     except ApiException as e:
         logger.debug(f"Exception {e} while deleting the ServiceAccount for network function: {name} from namespace: {namespace}")
 
+    if KUBERNETES_TYPE == 'openshift' and get_role(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+        delete_role(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)
+        if get_role_binding(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+            delete_role_binding(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)
+
     #Delete svc
     try:
         api = kubernetes.client.CoreV1Api()
         obj = api.delete_namespaced_service(
                 namespace=namespace,
-                name=name,
+                name=f"oai-{NF_TYPE}",
             )
         logger.debug(f"Service deleted for network function: {name} from namespace: {namespace}")
     except ApiException as e:
@@ -360,6 +404,26 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
                                   kopf=kopf)
             sa_name = sa_status['name']
 
+    if KUBERNETES_TYPE == 'openshift' and not get_role(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+        rules = [
+                    {
+                      "apiGroups": ["security.openshift.io"],
+                      "resourceNames": ["anyuid"],
+                      "resources": ["securitycontextconstraints"],
+                      "verbs": ["use"]
+                    }
+                ]
+        role_status = create_role(name=kwargs['body']['metadata']['name'], namespace=namespace, 
+                                  logger=logger,
+                                  labels=LABEL,
+                                  rules=rules)
+    if KUBERNETES_TYPE == 'openshift' and not get_role_binding(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
+        role_binding_status = create_role_binding(name=kwargs['body']['metadata']['name'],
+                                                  namespace=namespace,
+                                                  sa_name=sa_name,
+                                                  role_name=kwargs['body']['metadata']['name'],
+                                                  logger=logger,
+                                                  labels=LABEL)
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     nf_resources = conf['compute']
     nrf_svc = None
@@ -382,12 +446,12 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
         api = kubernetes.client.CoreV1Api()
         obj = api.read_namespaced_service(
             namespace=namespace,
-            name=kwargs['body']['metadata']['name']
+            name=f"oai-{NF_TYPE}"
             ).to_dict()
         svc_status = obj['metadata']
     except ApiException as e:
         if e.status == 404:
-            svc_status = create_svc(name=kwargs['body']['metadata']['name'], 
+            svc_status = create_svc(name=f"oai-{NF_TYPE}",#kwargs['body']['metadata']['name'],
                                   namespace=namespace,
                                   labels=LABEL,
                                   logger=logger,
@@ -413,12 +477,12 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
                                   compute=nf_resources, 
                                   labels=LABEL,
                                   nrf_svc=nrf_svc,
-                                  db_user=conf['database']['user'],
-                                  db_pass=conf['database']['pass'],
-                                  db_host=conf['database']['host'],
                                   image=conf['image'],
                                   image_pull_secrets=conf['imagePullSecrets'], 
                                   ports=nf_ports,
+                                  db_user=conf['database']['user'],
+                                  db_pass=conf['database']['pass'],
+                                  db_host=conf['database']['host'],
                                   config_map=cm_status['name'], 
                                   sa_name=sa_name,
                                   nf_type=NF_TYPE,

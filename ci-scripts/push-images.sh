@@ -25,7 +25,7 @@ PARENT=$2  #parent docker repo for re-tag and push
 USER=$3
 PASS=$4
 
-docker login -u $USER -p $PASS $PARENT
+docker login -u $USER -p $PASS docker.io
 docker push $PARENT/oai-amf-controller:$TAG
 docker push $PARENT/oai-smf-controller:$TAG
 docker push $PARENT/oai-nrf-controller:$TAG

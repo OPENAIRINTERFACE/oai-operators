@@ -34,8 +34,9 @@ sleep 40
 kubectl wait --for=condition=ready pod -l app=multus -n kube-system --timeout=2m
 configure_metallb_for_minikube
 ## Test if multus CNI is properly configured
+sleep 30
 kubectl create -f `pwd`/ci-scripts/nad-test.yaml
-kubectl wait --for=condition=ready pod -l app=testmultus
+kubectl wait --for=condition=ready pod -l app=testmultus --timeout=3m
 kubectl exec -it testpod -- ifconfig n3
 kubectl delete -f `pwd`/ci-scripts/nad-test.yaml
 #fetch the crds from nephio repository

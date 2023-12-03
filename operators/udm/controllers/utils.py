@@ -27,7 +27,10 @@ import requests
 requests.packages.urllib3.disable_warnings() 
 
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-NF_TYPE=str(os.getenv('NF_TYPE','udm'))      ## Network function name
+KUBERNETES_TYPE=str(os.getenv('KUBERNETES_TYPE','vanilla')).lower()    ##Allowed values VANILLA/Openshift
+if KUBERNETES_TYPE not in ['vanilla','openshift']:
+    print('Allowed values for kubernetes type are vanilla/openshift')
+NF_TYPE=str(os.getenv('NF_TYPE','ausf'))      ## Network function name
 LABEL={'workload.nephio.org/oai': f"{NF_TYPE}"}   ## Labels to put inside the owned resources
 OP_CONF_PATH=str(os.getenv('OP_CONF_PATH',f"/tmp/op/{NF_TYPE}.yaml"))  ## Operators configuration file
 NF_CONF_PATH = str(os.getenv('NF_CONF_PATH',f"/tmp/nf/{NF_TYPE}.yaml"))  ## Network function configuration file
@@ -481,4 +484,211 @@ def get_param_ref(name: str=None, namespace: str=None,
         Response = {'status':False,'reason':r.json()}
 
     return Response
-    
+
+def create_role(name: str=None, namespace: str=None, 
+              logger=None, 
+              labels: dict=None,
+              rules: list=None,
+              ):
+    '''
+    :param name: name of the role
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :param labels: labels
+    :type labels: dict
+    :param rules: rules for role
+    :type rules: list
+    :return: Response (status:created, pending, error, unauthorized)
+    :rtype: dict
+
+    ''' 
+    body = {
+                  "apiVersion": "rbac.authorization.k8s.io/v1",
+                  "kind": "Role",
+                  "metadata": {
+                    "name": str(name).lower(),
+                    "labels": labels,
+                    "namespace": namespace
+                  },
+                  "rules": rules
+                }
+
+    headers = {"Content-type": "application/json",
+        "Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.post(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/roles", headers=headers, json=body, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,201]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 401:
+        Response = {'status': False}
+    else:
+        Response = {'status':False}
+    return Response
+
+#get
+def get_role(name: str=None, namespace: str=None, logger=None):
+    '''
+    :param name: name of the role
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :return: Response
+    :rtype: dict
+    '''
+    headers = {"Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.get(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/roles/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,204]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 404:
+        Response = {'status': False}
+    else:
+        Response = {'status':False}
+    return Response
+
+#Delete
+def delete_role(name: str=None, namespace: str=None, logger=None):
+    '''
+    :param name: name of the role
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :return: Response
+    :rtype: dict
+    '''
+    headers = {"Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.delete(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/roles/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,204]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 404:
+        Response = {'status':False}
+    else:
+        Response = {'status':False}
+    return Response
+
+def create_role_binding(name: str=None, namespace: str=None, 
+              sa_name: str=None,
+              role_name: str=None,
+              logger=None, 
+              labels: dict=None
+              ):
+
+    '''
+    :param name: name of the role
+    :type name: str
+    :param sa_name: Service Account Name
+    :type sa_name: str
+    :param role_name: Role Name
+    :type role_name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :param labels: labels
+    :type labels: dict
+    :return: Response (status:created, pending, error, unauthorized)
+    :rtype: dict
+    '''
+    body = {
+                  "apiVersion": "rbac.authorization.k8s.io/v1",
+                  "kind": "RoleBinding",
+                  "metadata": {
+                    "name": name,
+                    "labels": labels,
+                    "namespace": namespace
+                  },
+                  "subjects": [
+                    {
+                      "kind": "ServiceAccount",
+                      "name": sa_name
+                    }
+                  ],
+                  "roleRef": {
+                    "kind": "Role",
+                    "name": role_name,
+                    "apiGroup": "rbac.authorization.k8s.io"
+                  }
+                }
+
+    headers = {"Content-type": "application/json",
+        "Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.post(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/rolebindings", headers=headers, json=body, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,201]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 401:
+        Response = {'status': False}
+    else:
+        Response = {'status':False}
+    return Response
+
+def get_role_binding(name: str=None, namespace: str=None, logger=None):
+    '''
+    :param name: name of the role
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :return: Response
+    :rtype: dict
+    '''
+    headers = {"Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.get(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/rolebindings/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,204]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 401:
+        Response = {'status': False}
+    else:
+        Response = {'status':False}
+    return Response
+
+#Delete
+def delete_role_binding(name: str=None, namespace: str=None, logger=None):
+    '''
+    :param name: name of the role
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :return: Response
+    :rtype: dict
+    '''
+    headers = {"Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.delete(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/rolebindings/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,204]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 401:
+        Response = {'status': False}
+    else:
+        Response = {'status':False}
+    return Response
