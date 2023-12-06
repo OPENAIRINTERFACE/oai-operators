@@ -416,7 +416,12 @@ def create_svc(name: str=None,
           "kind": "Service",
           "metadata": {
             "name": name,
-            "labels": labels
+            "labels": labels,
+            "annotations":
+                {
+                "skupper.io/proxy": "http2",
+                "skupper.io/address": f"{name}-shared"
+                }
           },
           "spec": {
             "type": SVC_TYPE,
