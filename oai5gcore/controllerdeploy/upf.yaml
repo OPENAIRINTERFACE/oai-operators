@@ -141,7 +141,7 @@ data:
         cpu: '100m'
         memory: '512Mi'
     logLevel: debug
-    image: 'docker.io/oaisoftwarealliance/oai-upf:develop'
+    image: 'docker.io/oaisoftwarealliance/oai-upf:v2.0.0'
     fqdn:
       nrf: 'oai-nrf.oaicp.svc.cluster.local'
       smf: 'oai-smf.oaicp.svc.cluster.local'
@@ -254,11 +254,9 @@ spec:
       securityContext:
         runAsGroup: 0
         runAsUser: 0
-      imagePullSecrets:
-      - name: regcred
       containers:
       - name: upf-controller
-        image: "docker.io/arorasagar/oai-upf-controller:develop"
+        image: "docker.io/arorasagar/oai-upf-controller:v2.0.0"
         imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'

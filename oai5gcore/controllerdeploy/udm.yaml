@@ -128,7 +128,7 @@ data:
         cpu: '100m'
         memory: '256Mi'
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-udm:develop'
+    image: 'docker.io/oaisoftwarealliance/oai-udm:v2.0.0'
     fqdn:
       nrf: oai-nrf
       udr: oai-udr
@@ -191,11 +191,9 @@ spec:
       securityContext:
         runAsGroup: 0
         runAsUser: 0
-      # imagePullSecrets:
-      # - name: regcred
       containers:
       - name: udm-controller
-        image: "docker.io/arorasagar/oai-udm-controller:develop"
+        image: "docker.io/arorasagar/oai-udm-controller:v2.0.0"
         imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'
@@ -217,13 +215,6 @@ spec:
             name: opconf
           - mountPath: /tmp/nf
             name: nfconf
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
-            memory: "256Mi"
-            cpu: "100m"
         resources:
           requests:
             memory: "128Mi"

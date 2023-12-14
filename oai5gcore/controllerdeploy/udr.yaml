@@ -128,7 +128,7 @@ data:
         cpu: '100m'
         memory: '512Mi'
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-udr:develop'
+    image: 'docker.io/oaisoftwarealliance/oai-udr:v2.0.0'
     fqdn:
       nrf: oai-nrf
     database:
@@ -200,11 +200,9 @@ spec:
       securityContext:
         runAsGroup: 0
         runAsUser: 0
-      # imagePullSecrets:
-      # - name: regcred
       containers:
       - name: udr-controller
-        image: "docker.io/arorasagar/oai-udr-controller:develop"
+        image: "docker.io/arorasagar/oai-udr-controller:v2.0.0"
         imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'

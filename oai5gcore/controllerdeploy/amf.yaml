@@ -136,7 +136,7 @@ data:
         cpu: '100m'
         memory: '512Mi'
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-amf:develop'
+    image: 'docker.io/oaisoftwarealliance/oai-amf:v2.0.0'
     fqdn:
       smf: 'oai-smf'
       ausf: 'oai-ausf'
@@ -259,11 +259,9 @@ spec:
       securityContext:
         runAsGroup: 0
         runAsUser: 0
-      imagePullSecrets:
-      - name: regcred
       containers:
       - name: amf-controller
-        image: "docker.io/arorasagar/oai-amf-controller:develop"
+        image: "docker.io/arorasagar/oai-amf-controller:v2.0.0"
         imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'

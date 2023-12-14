@@ -127,7 +127,7 @@ data:
         cpu: '100m'
         memory: '256Mi'
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-nrf:develop'
+    image: 'docker.io/oaisoftwarealliance/oai-nrf:v2.0.0'
     nfInterfaces:
       sbi: 'eth0'
     ports:
@@ -184,7 +184,7 @@ spec:
       - name: regcred
       containers:
       - name: nrf-controller
-        image: "oai-nrf-controller:develop"
+        image: "oai-nrf-controller:v2.0.0"
         imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'
