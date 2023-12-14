@@ -140,7 +140,7 @@ data:
         cpu: '100m'
         memory: '512Mi'
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-upf:develop'
+    image: 'docker.io/oaisoftwarealliance/oai-upf:v2.0.0'
     fqdn:
       nrf: 'localhost'
       smf: 'localhost'
@@ -255,7 +255,7 @@ spec:
       - name: regcred
       containers:
       - name: upf-controller
-        image: "docker.io/arorasagar/oai-upf-controller:develop"
+        image: "docker.io/arorasagar/oai-upf-controller:v2.0.0"
         imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'

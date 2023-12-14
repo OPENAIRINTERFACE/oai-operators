@@ -135,7 +135,7 @@ data:
         cpu: '100m'
         memory: '512Mi'
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-amf:develop'
+    image: 'docker.io/oaisoftwarealliance/oai-amf:v2.0.0'
     fqdn:
       smf: 'localhost'
       ausf: 'localhost'
@@ -260,7 +260,7 @@ spec:
       - name: regcred
       containers:
       - name: amf-controller
-        image: "docker.io/arorasagar/oai-amf-controller:develop"
+        image: "docker.io/arorasagar/oai-amf-controller:v2.0.0"
 #        command: ["sleep","10000"]
         imagePullPolicy: Always
         env:

@@ -128,7 +128,7 @@ data:
         port: 80
         protocol: TCP
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-smf:develop'
+    image: 'docker.io/oaisoftwarealliance/oai-smf:v2.0.0'
     ueSettings:
       mtu: 1500
       secondary: 1.1.1.1
@@ -277,11 +277,9 @@ spec:
       securityContext:
         runAsGroup: 0
         runAsUser: 0
-      imagePullSecrets:
-      - name: regcred
       containers:
       - name: smf-controller
-        image: "docker.io/arorasagar/oai-smf-controller:develop"
+        image: "docker.io/arorasagar/oai-smf-controller:v2.0.0"
         imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'
