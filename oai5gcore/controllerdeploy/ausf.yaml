@@ -128,7 +128,7 @@ data:
         cpu: '100m'
         memory: '256Mi'
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-ausf:v2.0.0'
+    image: 'docker.io/oaisoftwarealliance/oai-ausf:v2.0.1'
     fqdn:
       udm: oai-udm
       nrf: oai-nrf
@@ -195,7 +195,7 @@ spec:
         runAsUser: 0
       containers:
       - name: ausf-controller
-        image: "docker.io/arorasagar/oai-ausf-controller:v2.0.0"
+        image: "docker.io/arorasagar/oai-ausf-controller:v2.0.1"
         imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'

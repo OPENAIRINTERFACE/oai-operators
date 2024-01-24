@@ -92,6 +92,8 @@ sleep 3
 kubectl delete -f oai5gcore/controllerdeploy/
 sleep 2
 kubectl delete ns oaiops oai-upf oaicp
-./ci-scripts/push-images.sh $TAG $PARENT $USER $PASS
+if [ "${USER}" ] && [ "${PASS}" ]; then
+  ./ci-scripts/push-images.sh $TAG $PARENT $USER $PASS
+fi
 minikube delete
 echo "----------Test Done ----------"
