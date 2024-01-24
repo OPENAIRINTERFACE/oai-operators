@@ -72,7 +72,7 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
     nf_ports = conf['ports']
     if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys():
         nrf_svc = conf['fqdn']['nrf']
-    conf.update({'upfs':upfs})
+    conf.update({'upfs':set(upfs)})
     if len(data_networks)!=0 and 'PLMN' in conf.keys():
         for data_network in data_networks:
             # TODO: Consider nssai from all PLMNs
