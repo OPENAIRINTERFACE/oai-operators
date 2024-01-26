@@ -194,7 +194,7 @@ spec:
       - name: regcred
       containers:
       - name: ausf-controller
-        image: "oai-ausf-controller:v2.0.0"
+        image: docker.io/arorasagar/oai-ausf-controller:v2.0.1
         imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'

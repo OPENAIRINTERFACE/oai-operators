@@ -261,7 +261,7 @@ spec:
         runAsUser: 0
       containers:
       - name: amf-controller
-        image: "docker.io/arorasagar/oai-amf-controller:v2.0.0"
+        image: "docker.io/arorasagar/oai-amf-controller:v2.0.1"
         imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'

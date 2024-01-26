@@ -278,7 +278,7 @@ spec:
       - name: regcred
       containers:
       - name: smf-controller
-        image: "docker.io/arorasagar/oai-smf-controller:v2.0.0"
+        image: docker.io/arorasagar/oai-smf-controller:v2.0.1
         imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'
