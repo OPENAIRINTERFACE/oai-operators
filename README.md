@@ -12,9 +12,20 @@
   </tr>
 </table>
 
-[[_TOC_]]
+Table of contents
+=================
 
-## 1. Introduction
+<!--ts-->
+   * [Introduction](#introduction)
+   * [Licence Info](#license-info)
+   * [Functioning of Operators](#functioning-of-operators)
+   * [Install the Operators](#install-the-operators)
+   * [Create A Minikube Cluster](#create-a-minikube-cluster-an-example)
+   * [End to End test](#end-to-end-test-for-ci)
+   * [Contributions](#contributions)
+<!--te-->
+
+## Introduction
 
 This repository contains operators for [OpenAirInterface 5G core network functions](https://openairinterface.org/oai-5g-core-network-project/). Each network function has a dedicate operator. The operators are designed for [Nephio](https://nephio.org/), they are listening to the CRDs proposed by Nephio project. 
 
@@ -65,12 +76,12 @@ The operators are tested on Minikube `v1.30.1`, Kubernetes server `v1.26.3` and 
 If you want to use minikube as a testing environment then install it from their [website](https://minikube.sigs.k8s.io/docs/start/). In case you are interested you can follow go to the end of this guide to create a minikube cluster with multus CNI enabled.
 
 
-## 2. Licence info
+## Licence Info
 
 The source code is written under the 3-Clause BSD License. The text for 3-Clause BSD License is also available under LICENSE file in the same directory. For more details on third party software, please read the NOTICE file in the same directory.
 
 
-## 3. Functioning of Operators
+## Functioning of Operators
 
 The controller is listening to nephio proposed crd `workload.nephio.org_nfdeployments.yaml` cluster wide. In the future it will listen to OAI proposed CRDs also. In R2 the crd is common for all the network functions, the provider field is used to identify the network function and its provider.
 
@@ -128,7 +139,7 @@ cd oai-packages
 
 In case you do not have a working cluster, you can check the last section. 
 
-## 4. Install the Operators
+## Install the Operators
 
 ![Deployment](./docs/images/5g-operator-core.png)
 
@@ -203,7 +214,7 @@ kubectl exec -it $(kubectl get pods  -l app.kubernetes.io/name=oai-nr-ue | grep 
 kubectl exec -it $(kubectl get pods  -l app.kubernetes.io/name=oai-nr-ue | grep nr-ue | awk '{print $1}') -- ping -I oaitun_ue1 10.1.0.1 -c 4
 ```
 
-## 5. Create A Minikube Cluster (An example)
+## Create A Minikube Cluster (An example)
 
 In VM based minikube we have problems with running `oai-gnb` and `oai-nr-ue` in RFsimulated mode because of the base operating system of minikube VM. So we are using docker in docker based installation. 
 
@@ -222,7 +233,7 @@ minikube addons enable metrics-server
 
 You can also refer to `./ci-scripts/create-cluster.sh` script.
 
-## 6. End to end test (For testing purpose)
+## End to End test (For CI)
 
 For end to end test the script requires
 
@@ -236,7 +247,7 @@ For end to end test the script requires
 time ./ci-scripts/test-end-to-end.sh $TAG $PARENT $USER $PASS
 ```
 
-# 7. Contribution requests
+## Contributions
 
 In a general way, anybody who is willing can contribute on any part of the code in any network component.
 
