@@ -3,11 +3,7 @@
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
 # The OpenAirInterface Software Alliance licenses this file to You under
-# the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.openairinterface.org/?page_id=698
+# the terms found in the LICENSE file in the root of this source tree.
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,7 +13,7 @@
 #-------------------------------------------------------------------------------
 # For more information about the OpenAirInterface (OAI) Software Alliance:
 #      contact@openairinterface.org
-################################################################################
+##################################################################################
 apiVersion: v1
 kind: ServiceAccount
 metadata:
@@ -32,20 +28,27 @@ rules:
   - apiGroups: [""]
     resources: [events]
     verbs: [create]
+  - apiGroups: ["security.openshift.io"]
+    resources: ["securitycontextconstraints"]
+    resourceNames: ["anyuid"]
+    verbs: [use]
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
     verbs: [get, list, watch, create, update, patch]
-  # - apiGroups: ["workload.nephio.org"]
-  #   resources: [udmdeployments]
-  #   verbs: [list, watch]
+  - apiGroups: ["ref.nephio.org"]
+    resources: [configs,config]
+    verbs: [list, watch, update, patch, get]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: [roles,rolebindings]
+    verbs: [get, create, delete, patch]
   - apiGroups: ["workload.nephio.org"]
-    resources: [udmdeployments,udmdeployments/status]
-    verbs: [list, watch, update, patch]
+    resources: [nfdeployments,nfdeployments/status,nfconfigs,nfdeployments/finalizers]
+    verbs: [get, list, watch, update, patch]
   - apiGroups: [""]
-    resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
+    resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims,services/finalizers,serviceaccounts/finalizers]
     verbs:  [get, list, watch, create, update, patch, delete]
   - apiGroups: ["apps","extensions"]
-    resources: [deployments,deployments/status]
+    resources: [deployments,deployments/status,deployments/finalizers]
     verbs:  [get, list, watch, create, update, patch, delete]
   - apiGroups: ["k8s.cni.cncf.io"]
     resources: [network-attachment-definitions]
@@ -110,14 +113,12 @@ metadata:
   name: oai-udm-op-conf
 data:
   udm.yaml: |
-    image: 'docker.io/oaisoftwarealliance/oai-udm:v1.5.1'
     ports: 
       - name: 'http'
         port: 80
         protocol: TCP
-    fqdn:
-      udr: localhost
-      nrf: localhost
+    nfInterfaces:
+      sbi: 'eth0'
     compute:
       req:
         cpu: '100m'
@@ -125,66 +126,46 @@ data:
       limits:
         cpu: '100m'
         memory: '256Mi'
+    logLevel: info
+    image: 'docker.io/oaisoftwarealliance/oai-udm:v2.0.0'
+    fqdn:
+      nrf: localhost
+      udr: localhost
 ---
 apiVersion: v1
 kind: ConfigMap
 metadata:
   name: oai-udm-nf-conf
 data:
-  udm.conf: |
-    UDM =
-    {
-      INSTANCE_ID = 0;
-      PID_DIRECTORY = "/var/run";
-      UDM_NAME = "oai-udm";
-      LOG_LEVEL = "{{ conf["logLevel"] if "logLevel" in conf.keys() else 'debug' }}";
-
-      INTERFACES:{
-        # UDM binded interface for SBI interface (e.g., communication with UDR, AUSF)
-        SBI:{
-            INTERFACE_NAME = "{{ conf['nfInterfaces']['sbi'] if 'nfInterfaces' in conf.keys() and 'sbi' in conf['nfInterfaces'].keys() else 'eth0' }}";
-            IPV4_ADDRESS   = "read";
-            # YOUR NETWORK CONFIG HERE (default: 80)
-            PORT           = 80;
-            PPID           = 60;
-            # YOUR NETWORK CONFIG HERE (default: v1)
-            API_VERSION    = "v1";
-            # YOUR NETWORK CONFIG HERE (default: 8080)
-            HTTP2_PORT     = 8080;
-        };
-      };
-
-      # SUPPORT FEATURES
-      SUPPORT_FEATURES: {
-        # STRING, {"yes", "no"},
-        # Set to yes if UDM will relying on a DNS to resolve UDR's FQDN
-        USE_FQDN_DNS = "yes";
-        # Set to yes to enable HTTP2 for AUSF server
-        USE_HTTP2    = "no";
-        # Set to 'yes' if UDM resgisters to an NRF
-        REGISTER_NRF = "no";
-      }
-
-      UDR:{
-        IPV4_ADDRESS   = "127.0.0.1";
-        # YOUR NETWORK CONFIG HERE (default: 80)
-        PORT           = 80;
-        # YOUR API VERSION FOR UDR CONFIG HERE (default: v1)
-        API_VERSION    = "v1";
-        FQDN           = "{{ conf['fqdn']['udr'] if 'fqdn' in conf.keys() and 'udr' in conf['fqdn'].keys() else 'oai-udr' }}"
-      };
-
-      NRF :
-      {
-        IPV4_ADDRESS = "127.0.0.1";
-        # YOUR NRF CONFIG HERE (default: 80)
-        PORT         = 80;
-        # YOUR NRF API VERSION HERE
-        API_VERSION  = "v1";
-        FQDN         = "{{ conf['fqdn']['nrf'] if 'fqdn' in conf.keys() and 'nrf' in conf['fqdn'].keys() else 'oai-nrf' }}";
-      };
-    };
-
+  udm.yaml: |
+    # Log level
+    log_level:
+      udm: {{ conf['logLevel'] }}
+    register_nf:
+      udm: 'yes'
+    http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
+    ############## SBI Interfaces
+    ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
+    nfs:
+      udm:
+        host: {{ conf['fqdn']['udm'] }}
+        sbi:
+          port: 80
+          api_version: v1
+          interface_name: {{ conf['nfInterfaces']['sbi'] }}
+      udr:
+        host: {{ conf['fqdn']['udr'] }}
+        sbi:
+          port: 80
+          api_version: v1
+      nrf:
+        host: {{ conf['fqdn']['nrf'] }}
+        sbi:
+          port: 80
+          api_version: v1
+    ############## NF-specific configuration
+    udm:
+      udm_name: "OAI-UDM"
 ---
 apiVersion: apps/v1
 kind: Deployment
@@ -207,11 +188,11 @@ spec:
       securityContext:
         runAsGroup: 0
         runAsUser: 0
-      imagePullSecrets:
-      - name: regcred
+      # imagePullSecrets:
+      # - name: regcred
       containers:
       - name: udm-controller
-        image: "oai-udm-controller:v1.5.1"
+        image: docker.io/arorasagar/oai-udm-controller:v2.0.1
         imagePullPolicy: IfNotPresent
         env:
           - name: 'NF_TYPE'
@@ -221,23 +202,18 @@ spec:
           - name: 'DEPLOYMENT_FETCH_ITERATIONS'
             value: '100'
           - name: 'NF_CONF_PATH'
-            value: '/tmp/nf/udm.conf'
+            value: '/tmp/nf/udm.yaml'
           - name: 'OP_CONF_PATH'
             value: '/tmp/op/udm.yaml'
           - name: 'TESTING'
             value: 'yes'
+          - name: 'KUBERNETES_BASE_URL'
+            value: 'http://kubernetes.default.svc'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf
           - mountPath: /tmp/nf
             name: nfconf
-        resources:
-          requests:
-            memory: "256Mi"
-            cpu: "100m"
-          limits:
-            memory: "256Mi"
-            cpu: "100m"
         resources:
           requests:
             memory: "128Mi"

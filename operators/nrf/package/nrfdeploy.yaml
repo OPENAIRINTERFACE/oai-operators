@@ -1,6 +1,6 @@
 apiVersion: workload.nephio.org/v1alpha1
-kind: NRFDeployment
+kind: NFDeployment
 metadata:
   name: oai-nrf
 spec:
-  configRefs:
+  provider: nrf.openairinterface.org

@@ -1,7 +1,8 @@
+---
 apiVersion: workload.nephio.org/v1alpha1
-kind: UDRDeployment
+kind: NFDeployment
 metadata:
-  name: udr-regional
+  name: udr-core
   namespace: oaicp
 spec:
-  configRefs:
+  provider: udr.openairinterface.org

@@ -1,13 +1,49 @@
 apiVersion: workload.nephio.org/v1alpha1
-kind: AMFDeployment
+kind: NFConfig
 metadata:
-  name: amf-regional
+  name: amf-core-config
   namespace: oaicp
 spec:
+  configRefs:
+    - apiVersion: cellular.nephio.org/v1alpha1
+      kind: PLMN
+      metadata:
+        name: oai-plmn
+      spec:
+        plmnInfo:
+          - plmnID:
+              mcc: "001"
+              mnc: "01"
+            tac: 1
+            nssai:
+              - sst: 1
+                sd: ffffff
+                dnnInfo:
+                  - name: internet
+                    sessionType: ipv4
+                    dns: 8.8.8.8
+    - apiVersion: cellular.nephio.org/v1alpha1
+      kind: ServedGUAMI
+      metadata:
+        name: oai-served-guami
+      spec:
+        - amfID:
+            amfPointer: '01'
+            amfRegionID: '01'
+            amfSetID: '001'
+          plmnID:
+            mcc: "001"
+            mnc: "01"
+---
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFDeployment
+metadata:
+  name: amf-core
+  namespace: oaicp
+spec:
+  provider: amf.openairinterface.org
   capacity:
-    maxDownlinkThroughput: "0"
-    maxSubscribers: 10000
-    maxUplinkThroughput: "0"
+    maxSubscribers: 64
   interfaces:
   - name: n2
     ipv4:
@@ -18,3 +54,7 @@ spec:
   - name: vpc-ran
     interfaces:
     - n2
+  parametersRefs:
+  - name: amf-core-config
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NFConfig

@@ -14,7 +14,7 @@
 
 The operator is designed using [kopf](https://kopf.readthedocs.io/). The operator is completely written in python. At the moment the operator is highly experimental and designed for orchestration via [nephio](https://nephio.org/). 
 
-It can be used for `oai-upf` version `v1.5.1`.
+It can be used for `oai-upf` version `develop`.
 
 **NOTE**: So far we have only tested the operator on a minikube cluster. 
 
@@ -77,13 +77,13 @@ In case of docker pull limit on your network better to use pull secrets, just au
 The image is still not hosted on public respositories so you have to create an image
 
 ```bash
-docker build -f Dockerfile -t oai-upf-controller:v1.5.1 . --no-cache
+docker build -f Dockerfile -t oai-upf-controller:develop . --no-cache
 ```
 
 Create the CRD
 
 ```bash
-kubectl create -f ../../crd/workload.nephio.org_upfdeployments.yaml
+kubectl create -f ../../crd/workload.nephio.org_nfdeployments.yaml
 ```
 
 Start the controller 
@@ -136,5 +136,5 @@ kopf run controllers/controller.py --verbose
 In case you are not able to remove the package because the finalizer is blocking it then you can patch
 
 ```bash
-kubectl patch upfdeployments.workload.nephio.org oai-upf -p '{"metadata": {"finalizers": []}}' --type merge
+kubectl patch nfdeployments.workload.nephio.org oai-upf -p '{"metadata": {"finalizers": []}}' --type merge
 ```

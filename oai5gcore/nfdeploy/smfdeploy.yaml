@@ -1,14 +1,86 @@
-apiVersion: workload.nephio.org/v1alpha1
-kind: SMFDeployment
+apiVersion: ref.nephio.org/v1alpha1
+kind: Config
 metadata:
-  name: smf-regional
+  name: smf-core-upf-edge
   namespace: oaicp
 spec:
+  config:
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NFDeployment
+    metadata:
+      name: upf-edge
+      namespace: oai-upf
+    spec:
+      provider: upf.openairinterface.org
+      capacity:
+        maxDownlinkThroughput: 5G
+        maxUplinkThroughput: 5G
+      interfaces:
+      - name: n3
+        ipv4:
+          address: 172.3.0.254/24
+          gateway: 172.3.0.1
+        vlanID: 4
+      - name: n4
+        ipv4:
+          address: 172.1.1.253/24
+          gateway: 172.1.1.1
+        vlanID: 2
+      - name: n6
+        ipv4:
+          address: 172.0.1.254/24
+          gateway: 172.0.1.1
+        vlanID: 3
+      networkInstances:
+      - name: vpc-internal
+        interfaces:
+        - n4
+      - name: vpc-internet
+        dataNetworks:
+        - name: internet
+          pool:
+          - prefix: 10.1.0.0/24
+        interfaces:
+        - n6
+      - name: vpc-ran
+        interfaces:
+        - n3
+---
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFConfig
+metadata:
+  name: smf-core-config
+  namespace: oaicp
+spec:
+  configRefs:
+    - apiVersion: cellular.nephio.org/v1alpha1
+      kind: PLMN
+      metadata:
+        name: oai-plmn
+      spec:
+        plmnInfo:
+          - plmnID:
+              mcc: "001"
+              mcc: "01"
+            tac: 1
+            nssai:
+              - sst: 1
+                sd: ffffff
+                dnnInfo:
+                  - name: internet
+                    sessionType: ipv4
+                    dns: 8.8.8.8
+---
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFDeployment
+metadata:
+  name: smf-core
+  namespace: oaicp
+spec:
+  provider: smf.openairinterface.org
   capacity:
-    maxDownlinkThroughput: "0"
     maxNFConnections: 5
     maxSessions: 500
-    maxUplinkThroughput: "0"
   interfaces:
   - name: n4
     ipv4:
@@ -19,3 +91,10 @@ spec:
   - name: vpc-internal
     interfaces:
     - n4
+  parametersRefs:
+  - name: smf-core-config
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NFConfig
+  - name: smf-core-upf-edge
+    apiVersion: ref.nephio.org/v1alpha1
+    kind: Config

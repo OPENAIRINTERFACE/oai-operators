@@ -47,15 +47,15 @@ multus:
     routes: ""
     hostInterface: "eth0"      # Interface of the host machine on which this pod will be scheduled
   n3Interface:
-    create: false
-    IPadd: "172.3.0.253"
+    create: true
+    IPadd: "172.3.0.200"
     # #name inside the pod is hardcoded right now
     # name: "n3"
     Netmask: "24"
     # if gatway is empty then it will be removed
     Gateway: "172.3.0.1"
-    routes: [{"dst":"172.2.0.0/16","gw":"172.3.0.1"},{"dst":"172.3.0.0/16","gw":"172.3.0.1"}]
-    hostInterface: "eth1.4"      # Interface of the host machine on which this pod will be scheduled
+    routes: ""
+    hostInterface: "eth0"      # Interface of the host machine on which this pod will be scheduled
   ruInterface:            #Only needed if using a ethernet based RU/USRP
     create: false
     IPadd: "192.168.80.90"
@@ -91,8 +91,8 @@ config:
   amfIpAddress: "172.2.2.254"  # amf ip-address or service-name oai-amf-svc or 172.2.2.254
   gnbNgaIfName: "n2"            # if multus.n2Interface.create is true then use n2 
   gnbNgaIpAddress: "172.2.2.253" # if multus.n2Interface.create is true then use multus.n2Interface.Ipadd 
-  gnbNguIfName: "n2"   #if multus.n3Interface.create is true then use n3 or you can only use 1 interface n2 or eth0 
-  gnbNguIpAddress: "172.2.2.253" # if multus.n3Interface.create is true then use multus.n3Interface.Ipadd or multus.n2Interface.Ipadd if you are using only 1 extra interface
+  gnbNguIfName: "n3"   #if multus.n3Interface.create is true then use n3 or you can only use 1 interface n2 or eth0 
+  gnbNguIpAddress: "172.3.0.200" # if multus.n3Interface.create is true then use multus.n3Interface.Ipadd or multus.n2Interface.Ipadd if you are using only 1 extra interface
   threadParallelConfig: "PARALLEL_SINGLE_THREAD"
   sdrAddrs: "serial=XXXXXXX"
 

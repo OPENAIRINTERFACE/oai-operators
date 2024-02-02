@@ -1,7 +1,8 @@
+---
 apiVersion: workload.nephio.org/v1alpha1
-kind: UDMDeployment
+kind: NFDeployment
 metadata:
-  name: udm-regional
-  namespace: oaicp  
+  name: udm-core
+  namespace: oaicp
 spec:
-  configRefs:
+  provider: udm.openairinterface.org

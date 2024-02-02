@@ -1,6 +1,7 @@
+---
 apiVersion: workload.nephio.org/v1alpha1
-kind: UDRDeployment
+kind: NFDeployment
 metadata:
   name: oai-udr
 spec:
-  configRefs:
+  provider: udr.openairinterface.org

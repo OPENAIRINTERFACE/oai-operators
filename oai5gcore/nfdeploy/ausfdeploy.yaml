@@ -1,7 +1,8 @@
+---
 apiVersion: workload.nephio.org/v1alpha1
-kind: AUSFDeployment
+kind: NFDeployment
 metadata:
-  name: ausf-regional
+  name: ausf-core
   namespace: oaicp
 spec:
-  configRefs:
+  provider: ausf.openairinterface.org

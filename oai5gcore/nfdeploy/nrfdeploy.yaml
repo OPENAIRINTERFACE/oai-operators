@@ -1,7 +1,7 @@
 apiVersion: workload.nephio.org/v1alpha1
-kind: NRFDeployment
+kind: NFDeployment
 metadata:
-  name: nrf-regional
+  name: nrf-core
   namespace: oaicp
 spec:
-  configRefs:
+  provider: nrf.openairinterface.org

@@ -1,6 +1,7 @@
+---
 apiVersion: workload.nephio.org/v1alpha1
-kind: AUSFDeployment
+kind: NFDeployment
 metadata:
   name: oai-ausf
 spec:
-  configRefs:
+  provider: ausf.openairinterface.org

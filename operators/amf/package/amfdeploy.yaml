@@ -1,10 +1,62 @@
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: oai-amf-n2
+spec:
+  config: '{"cniVersion":"0.3.1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.2.2.254/24","gateway":"172.2.2.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
+---
 apiVersion: workload.nephio.org/v1alpha1
-kind: AMFDeployment
+kind: NFConfig
+metadata:
+  name: oai-amf-config
+  labels:
+    provider: amf.openairinterface.org
+spec:
+  configRefs:
+    - apiVersion: cellular.nephio.org/v1alpha1
+      kind: PLMN
+      metadata:
+        name: oai-plmn
+      spec:
+        plmnInfo:
+          - plmnID:
+              mcc: "001"
+              mnc: "01"
+            tac: 1
+            nssai:
+              - sst: 1
+                sd: ffffff
+                dnnInfo:
+                  - name: internet
+                    sessionType: ipv4
+                    dns: 8.8.8.8
+              - sst: 2
+                sd: ffffff
+                dnnInfo:
+                  - name: internet
+                    sessionType: ipv4
+                    dns: 8.8.8.8
+    - apiVersion: cellular.nephio.org/v1alpha1
+      kind: ServedGUAMI
+      metadata:
+        name: oai-served-guami
+      spec:
+        - amfID:
+            amfPointer: '01'
+            amfRegionID: '01'
+            amfSetID: '001'
+          plmnID:
+            mcc: "001"
+            mnc: "01"
+---
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFDeployment
 metadata:
   name: oai-amf
 spec:
+  provider: amf.openairinterface.org
   capacity:
-    maxSubscribers: 100
+    maxSubscribers: 200
   interfaces:
   - name: n2
     ipv4:
@@ -14,4 +66,7 @@ spec:
   - name: vpc-ran
     interfaces:
     - n2
-  configRefs:
+  parametersRefs:
+  - name: oai-amf-config
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NFConfig

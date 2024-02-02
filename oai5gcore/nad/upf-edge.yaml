@@ -3,11 +3,7 @@
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
 # The OpenAirInterface Software Alliance licenses this file to You under
-# the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.openairinterface.org/?page_id=698
+# the terms found in the LICENSE file in the root of this source tree.
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,27 +13,27 @@
 #-------------------------------------------------------------------------------
 # For more information about the OpenAirInterface (OAI) Software Alliance:
 #      contact@openairinterface.org
-################################################################################
+##################################################################################
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
-  name: upf-edge-02-n3
+  name: upf-edge-n3
   namespace: oai-upf
 spec:
-  config: '{"cniVersion":"0.3.1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.3.0.253/24","gateway":"172.3.0.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
+  config: '{"cniVersion":"0.3.1","name":"upf-edge-n3","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.3.0.254/24","gateway":"172.3.0.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
 ---
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
-  name: upf-edge-02-n4
+  name: upf-edge-n4
   namespace: oai-upf
 spec:
-  config: '{"cniVersion":"0.3.1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.1.1.252/24","gateway":"172.1.1.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
+  config: '{"cniVersion":"0.3.1","name":"upf-edge-n4","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.1.1.253/24","gateway":"172.1.1.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
 ---
 apiVersion: k8s.cni.cncf.io/v1
 kind: NetworkAttachmentDefinition
 metadata:
-  name: upf-edge-02-n6
+  name: upf-edge-n6
   namespace: oai-upf
 spec:
-  config: '{"cniVersion":"0.3.1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.0.1.253/24","gateway":"172.0.1.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
+  config: '{"cniVersion":"0.3.1","name":"upf-edge-n6","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.0.1.254/24","gateway":"172.0.1.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'

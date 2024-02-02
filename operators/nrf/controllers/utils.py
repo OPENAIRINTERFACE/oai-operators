@@ -3,11 +3,7 @@
 # contributor license agreements.  See the NOTICE file distributed with
 # this work for additional information regarding copyright ownership.
 # The OpenAirInterface Software Alliance licenses this file to You under
-# the OAI Public License, Version 1.1  (the "License"); you may not use this file
-# except in compliance with the License.
-# You may obtain a copy of the License at
-#
-#      http://www.openairinterface.org/?page_id=698
+# the terms found in the LICENSE file in the root of this source tree.
 #
 # Unless required by applicable law or agreed to in writing, software
 # distributed under the License is distributed on an "AS IS" BASIS,
@@ -17,7 +13,7 @@
 #-------------------------------------------------------------------------------
 # For more information about the OpenAirInterface (OAI) Software Alliance:
 #      contact@openairinterface.org
-################################################################################
+##################################################################################
 
 import os
 import yaml
@@ -27,18 +23,30 @@ from datetime import datetime
 from dateutil.tz import tzutc
 import json
 import requests
+import sys
 
 requests.packages.urllib3.disable_warnings() 
 
 TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
-HTTPS_VERIFY = bool(os.getenv('HTTPS_VERIFY',False)) ## To verfiy HTTPs certificates when communicating with cluster
+KUBERNETES_TYPE=str(os.getenv('KUBERNETES_TYPE','vanilla')).lower()    ##Allowed values VANILLA/Openshift
+if KUBERNETES_TYPE not in ['vanilla','openshift']:
+    print('Allowed values for kubernetes type are vanilla/openshift')
 NF_TYPE=str(os.getenv('NF_TYPE','nrf'))      ## Network function name
 LABEL={'workload.nephio.org/oai': f"{NF_TYPE}"}   ## Labels to put inside the owned resources
 OP_CONF_PATH=str(os.getenv('OP_CONF_PATH',f"/tmp/op/{NF_TYPE}.yaml"))  ## Operators configuration file
-NF_CONF_PATH = str(os.getenv('NF_CONF_PATH',f"/tmp/nf/{NF_TYPE}.conf"))  ## Network function configuration file
+NF_CONF_PATH = str(os.getenv('NF_CONF_PATH',f"/tmp/nf/{NF_TYPE}.yaml"))  ## Network function configuration file
 DEPLOYMENT_FETCH_INTERVAL=int(os.getenv('DEPLOYMENT_FETCH_INTERVAL',1)) # Fetch the status of deployment every x seconds
 DEPLOYMENT_FETCH_ITERATIONS=int(os.getenv('DEPLOYMENT_FETCH_ITERATIONS',100))  # Number of times to fetch the deployment
 LOG_LEVEL = str(os.getenv('LOG_LEVEL','INFO'))    ## Log level of the controller
+HTTPS_VERIFY = bool(os.getenv('HTTPS_VERIFY',False)) ## To verfiy HTTPs certificates when communicating with cluster
+TOKEN=os.popen('cat /var/run/secrets/kubernetes.io/serviceaccount/token').read() ## Token used to communicate with Kube cluster
+KUBERNETES_BASE_URL = str(os.getenv('KUBERNETES_BASE_URL','http://127.0.0.1:8080'))
+LOADBALANCER_IP = str(os.getenv('LOADBALANCER_IP',None))
+SVC_TYPE = str(os.getenv('SVC_TYPE','ClusterIP')) 
+
+if SVC_TYPE not in ['ClusterIP', 'LoadBalancer', 'NodePort']:
+    print(f"SVC_TYPE is case sensitive are you spelling {SVC_TYPE} correct?")
+    sys.exit('-1')
 
 def create_deployment(name: str=None, 
                     namespace: str=None, 
@@ -145,7 +153,7 @@ def create_deployment(name: str=None,
                             "command": [
                               f"/openair-{nf_type}/bin/oai_{nf_type}",
                               "-c",
-                              f"/openair-{nf_type}/etc/{nf_type}.conf",
+                              f"/openair-{nf_type}/etc/{nf_type}.yaml",
                               "-o"
                             ]
                           }
@@ -283,7 +291,7 @@ def create_config_map(name: str=None, namespace: str=None,
     configmap = kubernetes.client.V1ConfigMap(
         api_version="v1",
         kind="ConfigMap",
-        data={f"{nf_type}.conf":configuration},
+        data={f"{nf_type}.yaml":configuration},
         metadata=metadata
     )
     kopf.adopt(configmap)  # includes namespace, name, existing labels
@@ -402,26 +410,35 @@ def create_svc(name: str=None,
                 'targetPort': int(port['port'])
             }
             )
-
+    # SVC_TYPE (LoadBalancer,ClusterIP,NodePort)
     svc = {
           "apiVersion": "v1",
           "kind": "Service",
           "metadata": {
             "name": name,
-            "labels": labels
+            "labels": labels,
+            "annotations":
+                {
+                "skupper.io/proxy": "http2",
+                "skupper.io/address": f"{name}-shared"
+                }
           },
           "spec": {
-            "type": "ClusterIP",
+            "type": SVC_TYPE,
             "clusterIP": "None",
             "ports": _ports,
             "selector": labels
           }
         }
+    # have to do ip-address validation
+    if LOADBALANCER_IP !='None':
+        svc['spec'].update({'loadBalancerIP':LOADBALANCER_IP})
+    if SVC_TYPE in ['LoadBalancer','NodePort']:
+        svc['spec'].pop('clusterIP')
 
     kopf.adopt(svc)  # includes namespace, name, existing labels
     kopf.label(svc, labels, nested=['spec.template'])
     creation_timestamp =  None
-    print(svc)
     try:
         api = kubernetes.client.CoreV1Api()
         obj = api.create_namespaced_service(
@@ -435,3 +452,240 @@ def create_svc(name: str=None,
         raise kopf.PermanentError(f"Can not create service {name} in namespace {namespace} reason {e.reason}")
 
     return {'creation_timestamp':creation_timestamp,'name':name}
+
+def get_param_ref(name: str=None, namespace: str=None,
+              logger=None):
+    '''
+    :param name: name of the configmap
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :param kopf: Instance of kopf
+    :return: status
+    :rtype: Boolean
+    '''
+    headers = {"Content-type": "application/json",
+        "Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r = requests.get(f"{KUBERNETES_BASE_URL}/apis/ref.nephio.org/v1alpha1/namespaces/{namespace}/configs/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug("Response of request to fetch config.req %s response %s" %(r.request.url, r.json()))
+    if r.status_code==200:
+        Response = {'status': True,'output':r.json()}
+    elif r.status_code in [401,403]:
+        Response = {'status' :False,'reason':'unauthorized'}
+    elif r.status_code == 404:
+        Response ={'status': False,'reason':'notFound'}
+    else:
+        Response = {'status':False,'reason':r.json()}
+
+    return Response
+
+def create_role(name: str=None, namespace: str=None, 
+              logger=None, 
+              labels: dict=None,
+              rules: list=None,
+              ):
+    '''
+    :param name: name of the role
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :param labels: labels
+    :type labels: dict
+    :param rules: rules for role
+    :type rules: list
+    :return: Response (status:created, pending, error, unauthorized)
+    :rtype: dict
+
+    ''' 
+    body = {
+                  "apiVersion": "rbac.authorization.k8s.io/v1",
+                  "kind": "Role",
+                  "metadata": {
+                    "name": str(name).lower(),
+                    "labels": labels,
+                    "namespace": namespace
+                  },
+                  "rules": rules
+                }
+
+    headers = {"Content-type": "application/json",
+        "Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.post(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/roles", headers=headers, json=body, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,201]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 401:
+        Response = {'status': False}
+    else:
+        Response = {'status':False}
+    return Response
+
+#get
+def get_role(name: str=None, namespace: str=None, logger=None):
+    '''
+    :param name: name of the role
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :return: Response
+    :rtype: dict
+    '''
+    headers = {"Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.get(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/roles/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,204]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 404:
+        Response = {'status': False}
+    else:
+        Response = {'status':False}
+    return Response
+
+#Delete
+def delete_role(name: str=None, namespace: str=None, logger=None):
+    '''
+    :param name: name of the role
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :return: Response
+    :rtype: dict
+    '''
+    headers = {"Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.delete(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/roles/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,204]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 404:
+        Response = {'status':False}
+    else:
+        Response = {'status':False}
+    return Response
+
+def create_role_binding(name: str=None, namespace: str=None, 
+              sa_name: str=None,
+              role_name: str=None,
+              logger=None, 
+              labels: dict=None
+              ):
+
+    '''
+    :param name: name of the role
+    :type name: str
+    :param sa_name: Service Account Name
+    :type sa_name: str
+    :param role_name: Role Name
+    :type role_name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :param labels: labels
+    :type labels: dict
+    :return: Response (status:created, pending, error, unauthorized)
+    :rtype: dict
+    '''
+    body = {
+                  "apiVersion": "rbac.authorization.k8s.io/v1",
+                  "kind": "RoleBinding",
+                  "metadata": {
+                    "name": name,
+                    "labels": labels,
+                    "namespace": namespace
+                  },
+                  "subjects": [
+                    {
+                      "kind": "ServiceAccount",
+                      "name": sa_name
+                    }
+                  ],
+                  "roleRef": {
+                    "kind": "Role",
+                    "name": role_name,
+                    "apiGroup": "rbac.authorization.k8s.io"
+                  }
+                }
+
+    headers = {"Content-type": "application/json",
+        "Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.post(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/rolebindings", headers=headers, json=body, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,201]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 401:
+        Response = {'status': False}
+    else:
+        Response = {'status':False}
+    return Response
+
+def get_role_binding(name: str=None, namespace: str=None, logger=None):
+    '''
+    :param name: name of the role
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :return: Response
+    :rtype: dict
+    '''
+    headers = {"Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.get(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/rolebindings/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,204]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 401:
+        Response = {'status': False}
+    else:
+        Response = {'status':False}
+    return Response
+
+#Delete
+def delete_role_binding(name: str=None, namespace: str=None, logger=None):
+    '''
+    :param name: name of the role
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :return: Response
+    :rtype: dict
+    '''
+    headers = {"Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r=requests.delete(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/rolebindings/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,204]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 401:
+        Response = {'status': False}
+    else:
+        Response = {'status':False}
+    return Response
