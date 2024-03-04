@@ -210,6 +210,8 @@ spec:
             value: '/tmp/op/ausf.yaml'
           - name: 'TESTING'
             value: 'no'
+          - name: 'KUBERNETES_TYPE'
+            value: 'vanilla'
           - name: 'KUBERNETES_BASE_URL'
             value: 'https://kubernetes.default.svc'
         volumeMounts:

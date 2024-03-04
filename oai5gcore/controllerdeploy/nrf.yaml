@@ -202,6 +202,8 @@ spec:
             value: '/tmp/nf/nrf.yaml'
           - name: 'OP_CONF_PATH'
             value: '/tmp/op/nrf.yaml'
+          - name: 'KUBERNETES_TYPE'
+            value: 'vanilla'
           - name: 'KUBERNETES_BASE_URL'
             value: 'https://kubernetes.default.svc'
         volumeMounts:

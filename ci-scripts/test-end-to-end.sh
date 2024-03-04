@@ -17,16 +17,18 @@
 
 #/bin/bash
 set -eo pipefail
-## Usage ./ci-scripts/test-end-to-end.sh $tag $parent_repo $username_repositor $password_repository
+## Usage ./ci-scripts/test-end-to-end.sh $tag $parent_repo $username_repositor $password_repository $kubernetes_type
 TAG=$1
 PARENT=$2
 USER=$3
 PASS=$4
+KUBERNETES_TYPE=${$5:-'vanilla'} #vanilla or openshift
 
 function cleanup {
   echo "Removing minikube"
   minikube delete
   sed -i 's/imagePullPolicy\: IfNotPresent/imagePullPolicy\: Always/g' oai5gcore/controllerdeploy/*
+  sed -i 's/openshift/vanilla/g' oai5gcore/controllerdeploy/*
 }
 
 trap cleanup EXIT
@@ -39,6 +41,7 @@ eval $(minikube -p minikube docker-env)
 ./ci-scripts/build-images.sh $TAG $PARENT
 ## Use images from minikube ns 
 sed -i 's/imagePullPolicy\: Always/imagePullPolicy\: IfNotPresent/g' oai5gcore/controllerdeploy/*
+sed -i 's/vanilla/openshift/g' oai5gcore/controllerdeploy/*
 #create ns for controllers
 kubectl create ns oaiops
 #create namespaces
@@ -86,6 +89,7 @@ kubectl exec -it $(kubectl get pods  -l app.kubernetes.io/name=oai-nr-ue | grep 
 kubectl exec -it $(kubectl get pods  -l app.kubernetes.io/name=oai-nr-ue | grep nr-ue | awk '{print $1}') -- ping -I oaitun_ue1 10.1.0.1 -c 4
 ## Clean up
 sed -i 's/imagePullPolicy\: IfNotPresent/imagePullPolicy\: Always/g' oai5gcore/controllerdeploy/*
+sed -i 's/openshift/vanilla/g' oai5gcore/controllerdeploy/*
 helm uninstall nrue gnb
 kubectl delete -f oai5gcore/nfdeploy/
 sleep 3
