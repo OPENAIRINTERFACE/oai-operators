@@ -1,0 +1,57 @@
+################################################################################
+# Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The OpenAirInterface Software Alliance licenses this file to You under
+# the terms found in the LICENSE file in the root of this source tree.
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#-------------------------------------------------------------------------------
+# For more information about the OpenAirInterface (OAI) Software Alliance:
+#      contact@openairinterface.org
+##################################################################################
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: du-edge-f1
+  namespace: oairan
+spec:
+  config: '{"cniVersion":"0.3.1","name": "du-edge-f1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static"}}]}'
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: du-edge-mplane
+  namespace: oairan
+spec:
+  config: '{"cniVersion":"0.3.1","name": "du-edge-mplane","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static"}}]}'
+---
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetwork
+metadata:
+  name: du-edge-cplane
+  namespace: openshift-sriov-network-operator
+spec:
+  networkNamespace: oairan
+  resourceName: ruvfio
+  vlan: 3
+  spoofChk: "off"
+  trust: "on"
+  capabilities: '{ "mac": true }'
+---
+apiVersion: sriovnetwork.openshift.io/v1
+kind: SriovNetwork
+metadata:
+  name: du-edge-uplane
+  namespace: openshift-sriov-network-operator
+spec:
+  networkNamespace: oairan
+  resourceName: ruvfio
+  vlan: 3
+  spoofChk: "off"
+  trust: "on"
+  capabilities: '{ "mac": true }'

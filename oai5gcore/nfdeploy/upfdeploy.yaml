@@ -22,7 +22,8 @@ spec:
                 dnnInfo:
                   - name: internet
                     sessionType: ipv4
-                    dns: 8.8.8.8
+                    dns: 172.21.3.100
+                    subnet: 10.1.0.0/24
 ---
 apiVersion: workload.nephio.org/v1alpha1
 kind: NFDeployment
@@ -41,30 +42,27 @@ spec:
   interfaces:
   - name: n3
     ipv4:
-      address: 172.3.0.254/24
-      gateway: 172.3.0.1
-    vlanID: 4
+      address: 192.168.30.3/24
+      gateway: 192.168.30.1
+    vlanID: 30
   - name: n4
     ipv4:
-      address: 172.1.1.253/24
-      gateway: 172.1.1.1
-    vlanID: 2
+      address: 192.168.31.3/24
+      gateway: 192.168.31.1
+    vlanID: 31
   - name: n6
     ipv4:
-      address: 172.0.1.254/24
-      gateway: 172.0.1.1
-    vlanID: 3
+      address: 172.21.10.2/22
+      gateway: 172.21.11.254
+    vlanID: 422
   networkInstances:
   - name: vpc-internal
     interfaces:
     - n4
   - name: vpc-internet
-    dataNetworks:
-    - name: internet
-      pool:
-      - prefix: 10.1.0.0/24
     interfaces:
     - n6
   - name: vpc-ran
     interfaces:
     - n3
+    

@@ -1,0 +1,487 @@
+################################################################################
+# Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The OpenAirInterface Software Alliance licenses this file to You under
+# the terms found in the LICENSE file in the root of this source tree.
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#-------------------------------------------------------------------------------
+# For more information about the OpenAirInterface (OAI) Software Alliance:
+#      contact@openairinterface.org
+##################################################################################
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: default
+  name: oai-du-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: oai-du-operator-cluster-role
+rules:
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create]
+  - apiGroups: ["security.openshift.io"]
+    resources: ["securitycontextconstraints"]
+    resourceNames: ["privileged"]
+    verbs: [use]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: ["ref.nephio.org"]
+    resources: [configs,config]
+    verbs: [list, watch, update, patch, get]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: [roles,rolebindings]
+    verbs: [get, create, delete, patch]
+  - apiGroups: ["workload.nephio.org"]
+    resources: [nfdeployments,nfdeployments/status,nfconfigs,nfdeployments/finalizers]
+    verbs: [get, list, watch, update, patch]
+  - apiGroups: [""]
+    resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims,services/finalizers,serviceaccounts/finalizers]
+    verbs:  [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["apps","extensions"]
+    resources: [deployments,deployments/status,deployments/finalizers]
+    verbs:  [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["k8s.cni.cncf.io"]
+    resources: [network-attachment-definitions]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [list, watch]
+  - apiGroups: [admissionregistration.k8s.io/v1, admissionregistration.k8s.io/v1beta1]
+    resources: [validatingwebhookconfigurations, mutatingwebhookconfigurations]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oai-du-operator-rolebinding-cluster
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: oai-du-operator-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: oai-du-operator
+    namespace: default
+## In case you want to restrict to a namespace uncomment this role and remove the rights from cluster role
+#---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: Role
+# metadata:
+#   namespace: default
+#   name: oai-du-operator-role
+# rules:
+#   # Framework: posting the events about the handlers progress/errors.
+#   - apiGroups: [""]
+#     resources: [events]
+#     verbs: [create]
+#   - apiGroups: ["workload.nephio.org"]
+#     resources: [dudeployments,dudeployments/status]
+#     verbs: [list, watch, update, patch]
+#   - apiGroups: [""]
+#     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
+#     verbs:  [get, list, watch, create, update, patch, delete]
+#   - apiGroups: ["apps","extensions"]
+#     resources: [deployments,deployments/status]
+#     verbs:  [get, list, watch, create, update, patch, delete]
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   namespace: default
+#   name: oai-du-operator-rolebinding-namespaced
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: Role
+#   name: oai-du-operator-role
+# subjects:
+#   - kind: ServiceAccount
+#     name: oai-du-operator
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oai-du-op-conf
+data:
+  du.yaml: |
+    nad: 
+      parent: 'eth0'
+      create: False
+    # these ports are here for creating the kube-svc should be same for the nf
+    nfInterfaces:
+      f1: 'f1'
+      ru: 'ru'
+    ports:
+      - name: 'f1ap'
+        port: 38472
+        protocol: SCTP
+      - name: 'f1u'
+        port: 2153
+        protocol: UDP
+    compute:
+      req:
+        cpu: '10'
+        memory: '8Gi'
+        hugepages: '10Gi'
+        sriov: '2'
+      limits:
+        cpu: '10'
+        memory: '8Gi'
+        hugepages: '10Gi'
+        sriov: '2'
+    sriovResource: ruvfio
+    cucpIpaddress: 192.168.32.2
+    image: 'docker.io/oaisoftwarealliance/oai-gnb:2024.w15'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oai-du-nf-conf
+data:
+  du.conf: |
+    Active_gNBs = ( "{{ conf['duName'] }}");
+    # Asn1_verbosity, choice in: none, info, annoying
+    Asn1_verbosity = "none";
+    sa = 1;
+    gNBs =
+    (
+     {
+        ////////// Identification parameters:
+        gNB_ID    =  0x{{ conf['RANConfig']['gNBID'] }};
+        gNB_DU_ID =  0x{{ conf['RANConfig']['duID'] }};
+        gNB_name  =  "{{ conf['RANConfig']['duName'] }}";
+        // Tracking area code, 0x0000 and 0xfffe are reserved values
+        tracking_area_code  = {{ conf['PLMN']['PLMNInfo'][0]['tac'] }};
+        plmn_list = ({ mcc = {{ conf['PLMN']['PLMNInfo'][0]['plmnID']['mcc'] }}; mnc = {{ conf['PLMN']['PLMNInfo'][0]['plmnID']['mnc'] }}; mnc_length = 2; snssaiList = ({ sst = {{ conf['PLMN']['PLMNInfo'][0]['nssai'][0]['sst'] }} }) });
+
+        nr_cellid = {{ conf['RANConfig']['nrCellId'] }}; #1;
+
+        ////////// Physical parameters:
+
+        pdsch_AntennaPorts_XP = {{ conf['RANConfig']['pdschAntennaPortsXP'] }}; #2; 
+        pusch_AntennaPorts    = {{ conf['RANConfig']['puschAntennaPorts'] }}; #4;
+        do_CSIRS              = 1;
+        do_SRS                = 0 ;
+        sib1_tda        = 15;
+        force_UL256qam_off    = {{ conf['RANConfig']['forceUL256qamOff'] }};
+
+        pdcch_ConfigSIB1 = (
+          {
+            controlResourceSetZero = 11;
+            searchSpaceZero = 0;
+          }
+        );
+
+        servingCellConfigCommon = (
+        {
+          physCellId                                                    = {{ conf['RANConfig']['physicalCellID'] }};
+         # n_TimingAdvanceOffset                                         = 0;
+    #  downlinkConfigCommon
+        #frequencyInfoDL
+          absoluteFrequencySSB                                          = {{ conf['RANConfig']['frequencyInfoDL']['absoluteFrequencySSB'] }}; #623328;
+          dl_frequencyBand                                              = {{ conf['RANConfig']['frequencyInfoDL']['dlFrequencyBand'] }}; #78;
+          dl_absoluteFrequencyPointA                                    = {{ conf['RANConfig']['frequencyInfoDL']['dlAbsoluteFrequencyPointA'] }}; #620052;
+          #scs-SpecificCarrierList
+            dl_offstToCarrier                                           = 0;
+    # subcarrierSpacing
+    # 0=kHz15, 1=kHz30, 2=kHz60, 3=kHz120
+            dl_subcarrierSpacing                                        = {{ conf['RANConfig']['frequencyInfoDL']['dlSubcarrierSpacing'] }}; # 1;
+            dl_carrierBandwidth                                         = {{ conf['RANConfig']['frequencyInfoDL']['dlCarrierBandwidth'] }}; #273;
+         #initialDownlinkBWP
+          #genericParameters
+           initialDLBWPlocationAndBandwidth                             = 1099; #38.101-1 Table 5.3.2-1
+           #
+    # subcarrierSpacing
+    # 0=kHz15, 1=kHz30, 2=kHz60, 3=kHz120
+            initialDLBWPsubcarrierSpacing                               = 1;
+          #pdcch-ConfigCommon
+            initialDLBWPcontrolResourceSetZero                          = 11;
+            initialDLBWPsearchSpaceZero                                 = 0;
+
+      #uplinkConfigCommon
+         #frequencyInfoUL
+          ul_frequencyBand                                              = {{ conf['RANConfig']['frequencyInfoUL']['ulFrequencyBand'] }}; #78;
+          #scs-SpecificCarrierList
+          ul_offstToCarrier                                             = 0;
+    # subcarrierSpacing
+    # 0=kHz15, 1=kHz30, 2=kHz60, 3=kHz120
+          ul_subcarrierSpacing                                          = {{ conf['RANConfig']['frequencyInfoUL']['ulSubcarrierSpacing'] }}; #1;
+          ul_carrierBandwidth                                           = {{ conf['RANConfig']['frequencyInfoUL']['ulCarrierBandwidth'] }}; #273;
+          pMax                                                          = 23;
+         #initialUplinkBWP
+          #genericParameters
+            initialULBWPlocationAndBandwidth                            = 1099;
+    # subcarrierSpacing
+    # 0=kHz15, 1=kHz30, 2=kHz60, 3=kHz120
+            initialULBWPsubcarrierSpacing                               = 1;
+          #rach-ConfigCommon
+            #rach-ConfigGeneric
+              prach_ConfigurationIndex                                  = {{ conf['RANConfig']['rachConfigCommon']['prachConfigurationIndex'] }}# ;151;
+    #prach_msg1_FDM
+    #0 = one, 1=two, 2=four, 3=eight
+              prach_msg1_FDM                                            = 0;
+              prach_msg1_FrequencyStart                                 = 0;
+              zeroCorrelationZoneConfig                                 = 0;
+              preambleReceivedTargetPower                               = -100;
+    #preamblTransMax (0...10) = (3,4,5,6,7,8,10,20,50,100,200)
+              preambleTransMax                                          = 8;
+    #powerRampingStep
+    # 0=dB0,1=dB2,2=dB4,3=dB6
+            powerRampingStep                                            = 3;
+    #ra_ReponseWindow
+    #1,2,4,8,10,20,40,80
+            ra_ResponseWindow                                           = 5;
+    #ssb_perRACH_OccasionAndCB_PreamblesPerSSB_PR
+    #1=oneeighth,2=onefourth,3=half,4=one,5=two,6=four,7=eight,8=sixteen
+            ssb_perRACH_OccasionAndCB_PreamblesPerSSB_PR                = 3;
+    #oneHalf (0..15) 4,8,12,16,...60,64
+            ssb_perRACH_OccasionAndCB_PreamblesPerSSB                   = 15;
+    #ra_ContentionResolutionTimer
+    #(0..7) 8,16,24,32,40,48,56,64
+            ra_ContentionResolutionTimer                                = 7;
+            rsrp_ThresholdSSB                                           = 19;
+    #prach-RootSequenceIndex_PR
+    #1 = 839, 2 = 139
+            prach_RootSequenceIndex_PR                                  = 2;
+            prach_RootSequenceIndex                                     = 1;
+            # SCS for msg1, can only be 15 for 30 kHz < 6 GHz, takes precendence over the one derived from prach-ConfigIndex
+            #
+            msg1_SubcarrierSpacing                                      = 1,
+    # restrictedSetConfig
+    # 0=unrestricted, 1=restricted type A, 2=restricted type B
+            restrictedSetConfig                                         = 0,
+
+    # this is the offset between the last PRACH preamble power and the Msg3 PUSCH, 2 times the field value in dB
+            msg3_DeltaPreamble                                          = 2;
+            p0_NominalWithGrant                                         = -96;
+
+    # pucch-ConfigCommon setup :
+    # pucchGroupHopping
+    # 0 = neither, 1= group hopping, 2=sequence hopping
+            pucchGroupHopping                                           = 0;
+            hoppingId                                                   = 0;
+            p0_nominal                                                  = -96;
+    # ssb_PositionsInBurs_BitmapPR
+    # 1=short, 2=medium, 3=long
+          ssb_PositionsInBurst_PR                                       = 2;
+          ssb_PositionsInBurst_Bitmap                                   = 0x1;
+    # ssb_periodicityServingCell
+    # 0 = ms5, 1=ms10, 2=ms20, 3=ms40, 4=ms80, 5=ms160, 6=spare2, 7=spare1
+          ssb_periodicityServingCell                                    = 2;
+    # dmrs_TypeA_position
+    # 0 = pos2, 1 = pos3
+          dmrs_TypeA_Position                                           = 0;
+    # subcarrierSpacing
+    # 0=kHz15, 1=kHz30, 2=kHz60, 3=kHz120
+          subcarrierSpacing                                             = 1;
+      #tdd-UL-DL-ConfigurationCommon
+    # subcarrierSpacing
+    # 0=kHz15, 1=kHz30, 2=kHz60, 3=kHz120
+          referenceSubcarrierSpacing                                    = 1;
+          # pattern1
+          # dl_UL_TransmissionPeriodicity
+          # 0=ms0p5, 1=ms0p625, 2=ms1, 3=ms1p25, 4=ms2, 5=ms2p5, 6=ms5, 7=ms10
+          dl_UL_TransmissionPeriodicity                                 = {{ conf['RANConfig']['slotPattern']['dlUlTransmissionPeriodicity'] }}; #6;
+          nrofDownlinkSlots                                             = {{ conf['RANConfig']['slotPattern']['nrofDownlinkSlots'] }}; #7;
+          nrofDownlinkSymbols                                           = {{ conf['RANConfig']['slotPattern']['nrofDownlinkSymbols'] }}; #6;
+          nrofUplinkSlots                                               = {{ conf['RANConfig']['slotPattern']['nrofUplinkSlots'] }}; #2;
+          nrofUplinkSymbols                                             = {{ conf['RANConfig']['slotPattern']['nrofUplinkSymbols'] }}; #4;
+
+      ssPBCH_BlockPower                                                 = 10;
+      }
+
+      );
+
+        # ------- SCTP definitions
+        SCTP :
+        {
+            # Number of streams to use in input/output
+            SCTP_INSTREAMS  = 2;
+            SCTP_OUTSTREAMS = 2;
+        };
+      }
+    );
+
+    MACRLCs = (
+    {
+      num_cc                      = 1;
+      tr_s_preference             = "local_L1";
+      tr_n_preference             = "f1";
+      local_n_if_name             = "{{ conf['nfInterfaces']['f1'] }}";
+      local_n_address             = "@F1_DU_IP_ADDRESS@";
+      remote_n_address            = "@CU_CP_IP_ADDRESS@";
+      pusch_TargetSNRx10          = 300;
+      pucch_TargetSNRx10          = 230;
+      local_n_portc               = 500;
+      local_n_portd               = 2153;
+      remote_n_portc              = 501;
+      remote_n_portd              = 2153;
+      dl_bler_target_upper=.35;
+      dl_bler_target_lower=.15; 
+      ul_bler_target_upper=.35;
+      ul_bler_target_lower=.15;
+      pusch_FailureThres          = 100;
+      ul_max_mcs                  = 28;
+    }
+    );
+
+    L1s = (
+    {
+      num_cc = 1;
+      tr_n_preference = "local_mac";
+      prach_dtx_threshold = 100;
+      pucch0_dtx_threshold = 80;
+      pusch_dtx_threshold = 10;
+      max_ldpc_iterations = 15;
+      tx_amp_backoff_dB = 12; # needs to match O-RU configuration
+      L1_rx_thread_core = @L1_RX_CORE@;
+      L1_tx_thread_core = @L1_TX_CORE@; # relevant after merge of l1_tx_thread
+      phase_compensation = 0; # needs to match O-RU configuration
+    }
+    );
+
+    RUs = (
+    {
+      local_rf       = "no";
+      nb_tx          = {{ conf['RANConfig']['ruConfig']['nbTx'] }}; #4;
+      nb_rx          = {{ conf['RANConfig']['ruConfig']['nbRx'] }}; #4;
+      att_tx         = 0
+      att_rx         = 0;
+      bands          = [78];
+      max_pdschReferenceSignalPower = -27;
+      max_rxgain                    = 75;
+      sf_extension                  = 0;
+      eNB_instances  = [0];
+      ru_thread_core = @RU_CORE@;
+      sl_ahead       = 10;
+      ##beduorming 1x2 matrix: 1 layer x 2 antennas
+      bf_weights = [0x00007fff, 0x0000,0x00007fff, 0x0000];
+      tr_preference  = "raw_if4p5"; # important: activate FHI7.2
+      do_precoding = 0; # needs to match O-RU configuration
+    }
+    );
+
+    log_config :
+    {
+      global_log_level                      ="info";
+      hw_log_level                          ="info";
+      phy_log_level                         ="info";
+      mac_log_level                         ="info";
+      rlc_log_level                         ="info";
+      pdcp_log_level                        ="info";
+      rrc_log_level                         ="info";
+      ngap_log_level                        ="info";
+      f1ap_log_level                        ="info";
+    };
+
+    fhi_72 = {
+      dpdk_devices = ("@C_PLANE_PCI_ADD@", "@U_PLANE_PCI_ADD@");
+      system_core = @SYSTEM_CORE@;
+      io_core = @IO_CORE@;
+      worker_cores = (@WORKER_CORE_LIST@);
+      du_addr = ("{{ conf['nfInterfaces']['cPlaneMacAdd'] }}", "{{ conf['nfInterfaces']['uPlaneMacAdd'] }}");
+      ru_addr = ("{{ conf['RANConfig']['ruConfig']['cPlaneMacAdd'] }}", "{{ conf['RANConfig']['ruConfig']['uPlaneMacAdd'] }}");
+      mtu = {{ conf['RANConfig']['ruConfig']['mtu'] }};
+      file_prefix = "fhi_72";
+      fh_config = ({
+        Tadv_cp_dl = 125;
+        T2a_cp_dl = (259, 500);
+        T2a_cp_ul = (25, 500);
+        T2a_up = (134, 375);
+        Ta3 = (152, 160);
+        T1a_cp_dl = (419, 470);
+        T1a_cp_ul = (285, 336);
+        T1a_up = (294, 345);
+        Ta4 = (0, 200);
+        ru_config = {
+          iq_width = 9;
+          iq_width_prach = 9;
+          fft_size = 12;
+        };
+        prach_config = {
+          eAxC_offset = 4;
+        };
+      });
+    };
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oai-du-controller
+  labels:
+    app.kubernetes.io/name: oai-du
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oai-du
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oai-du
+    spec:
+      securityContext:
+        runAsGroup: 0
+        runAsUser: 0
+      containers:
+      - name: du-controller
+        image: "docker.io/arorasagar/oai-du-controller:v2.0.1"
+#        command: ["sleep","10000"]
+        imagePullPolicy: Always
+        env:
+          - name: 'NF_TYPE'
+            value: 'du'
+          - name: 'DEPLOYMENT_FETCH_INTERVAL'
+            value: '1'
+          - name: 'DEPLOYMENT_FETCH_ITERATIONS'
+            value: '100'
+          - name: 'NF_CONF_PATH'
+            value: '/tmp/nf/du.yaml'
+          - name: 'OP_CONF_PATH'
+            value: '/tmp/op/du.conf'
+          - name: 'TESTING'
+            value: 'no'
+          - name: 'KUBERNETES_BASE_URL'
+            value: 'https://kubernetes.default.svc'
+          - name: 'KUBERNETES_TYPE'
+            value: 'openshift'
+        volumeMounts:
+          - mountPath: /tmp/op
+            name: opconf
+          - mountPath: /tmp/nf
+            name: nfconf
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "100m"
+        # livenessProbe:
+        #   httpGet:
+        #     path: /healthz
+        #     port: 8080
+        #   initialDelaySeconds: 2
+        #   periodSeconds: 5
+      volumes:
+      - configMap:
+          name: oai-du-op-conf
+        name: opconf
+      - configMap:
+          name: oai-du-nf-conf
+        name: nfconf
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      serviceAccountName: oai-du-operator
+      terminationGracePeriodSeconds: 5

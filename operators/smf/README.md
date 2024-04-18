@@ -14,8 +14,6 @@
 
 The operator is designed using [kopf](https://kopf.readthedocs.io/). The operator is completely written in python. At the moment the operator is highly experimental and designed for orchestration via [nephio](https://nephio.org/). 
 
-It can be used for `oai-smf` version `v1.5.1`.
-
 **NOTE**: So far we have only tested the operator on a minikube cluster. 
 
 The directory structure is below:
@@ -26,17 +24,17 @@ The directory structure is below:
 │   ├── controller.py (Main controller logic)
 │   └── utils.py (Supporting functions)
 ├── deployment
-│   └── smf.yaml (to deploy the operator)
+│   └── nf.yaml (to deploy the operator)
 ├── Dockerfile  
 ├── package
-│   └── smfdeploy.yaml (Standalone deployment of SMF operator)
+│   └── deploy.yaml (Standalone deployment of SMF operator)
 ├── README.md
 └── requirements.txt (All the needed python dependencies)
 ```
 
 ## Functioning
 
-The controller is listening to nephio proposed crd `workload.nephio.org_smfdeployments.yaml` cluster wide. In the future it will listen to OAI proposed CRDs also.
+The controller is listening to nephio proposed crd `workload.nephio.org_nfdeployments.yaml` cluster wide. In the future it will listen to OAI proposed CRDs also.
 
 Controller requires configuration file of the network function and it allows configuring certain config parameters when the controller is deployed. The controller requires two configmaps when running inside a pod or during development phase you can just provide the path of the network function configuration file and the controllers configuration file. The reason of having controllers configuration file is to only expose some important paramters to configure the network function rather than exposing all the parameters. 
 
@@ -45,53 +43,56 @@ The idea of this controller is not to expose multiple configuration paramters bu
 There are some environment parameters which are used by the controller to configure network function configuration files. They are present in [utils.py](controllers/utils.py)
 
 ```bash
-HTTPS_VERIFY = bool(os.getenv('HTTPS_VERIFY',False)) ## To verfiy HTTPs certificates when communicating with cluster
-TOKEN=os.popen('cat /var/run/secrets/kubernetes.io/serviceaccount/token').read() ## Token used to communicate with Kube cluster
+TIME_FORMAT = "%Y-%m-%dT%H:%M:%SZ"
+KUBERNETES_TYPE=str(os.getenv('KUBERNETES_TYPE','vanilla')).lower()    ##Allowed values VANILLA/Openshift
+if KUBERNETES_TYPE not in ['vanilla','openshift']:
+    print('Allowed values for kubernetes type are vanilla/openshift')
 NF_TYPE=str(os.getenv('NF_TYPE','smf'))      ## Network function name
 LABEL={'workload.nephio.org/oai': f"{NF_TYPE}"}   ## Labels to put inside the owned resources
 OP_CONF_PATH=str(os.getenv('OP_CONF_PATH',f"/tmp/op/{NF_TYPE}.yaml"))  ## Operators configuration file
-NF_CONF_PATH = str(os.getenv('NF_CONF_PATH',f"/tmp/nf/{NF_TYPE}.conf"))  ## Network function configuration file
+NF_CONF_PATH = str(os.getenv('NF_CONF_PATH',f"/tmp/nf/{NF_TYPE}.yaml"))  ## Network function configuration file
 DEPLOYMENT_FETCH_INTERVAL=int(os.getenv('DEPLOYMENT_FETCH_INTERVAL',1)) # Fetch the status of deployment every x seconds
 DEPLOYMENT_FETCH_ITERATIONS=int(os.getenv('DEPLOYMENT_FETCH_ITERATIONS',100))  # Number of times to fetch the deployment
 LOG_LEVEL = str(os.getenv('LOG_LEVEL','INFO'))    ## Log level of the controller
-TESTING = bool(os.getenv('TESTING','no'))    ## If testing the network function, it will remove the init container which checks for NRFs availability
+TESTING = str(os.getenv('TESTING','yes'))    ## If testing the network function, it will remove the init container which checks for NRFs availability
+HTTPS_VERIFY = bool(os.getenv('HTTPS_VERIFY',False)) ## To verfiy HTTPs certificates when communicating with cluster
+TOKEN=os.popen('cat /var/run/secrets/kubernetes.io/serviceaccount/token').read() ## Token used to communicate with Kube cluster
+KUBERNETES_BASE_URL = str(os.getenv('KUBERNETES_BASE_URL','http://127.0.0.1:8080'))
 ```
 
-SMF needs network-attachement-defination for N2 interface. Normally its nephio which will provide the nad. Controller is also capable of creating a nad via changing these fields in deployment/smf.yaml configmap of smf.yaml
+SMF needs network-attachement-definition for N4 interface. Normally its nephio which will provide the nad. Controller is also capable of creating a nad via changing these fields in [nf.yaml](./deployment/nf.yaml) configmap of nf.yaml
 
 ```bash
     nad:
-      parent: 'eth1'   #parent interface on the host machine to create the bridge
-      create: False    #If false it will wait for multus defination in the cluster namespace
+      parent: 'eth0'   #parent interface on the host machine to create the bridge
+      create: False    #If false it will wait for multus definition in the cluster namespace
 ``` 
 
-In case of docker pull limit on your network better to use pull secrets, just authenticated with the docker hub. You can add the pull secret in the operator configuration, smf.yaml in configmap like below
+In case of docker pull limit on your network better to use pull secrets, just authenticated with the docker hub. You can add the pull secret in the operator configuration, [nf.yaml](./deployment/nf.yaml) in configmap like below
 
 ```bash
     imagePullSecrets:
       - name: test
 ```
 
-**NOTE**: All the network function controllers except upf and nrf have the same functioning. Though they have a seperate code base but its still similar at the moment.
-
 ## Deployment
 
-The image is still not hosted on public respositories so you have to create an image
+The image is hosted on public respositories, but if you made changes then you need to built it:
 
 ```bash
-docker build -f Dockerfile -t oai-smf-controller:v1.5.1 . --no-cache
+docker build -f Dockerfile -t oai-smf-controller:develop . --no-cache
 ```
 
 Create the CRD
 
 ```bash
-kubectl create -f ../../crd/workload.nephio.org_smfdeployments.yaml
+kubectl create -f ../../crd/workload.nephio.org_nfdeployments.yaml
 ```
 
 Start the controller 
 
 ```bash
-kubectl create -f deployment/smf.yaml
+kubectl create -f deployment/nf.yaml
 ```
 
 Normally nephio will create the nad incase you want to create manually then you do 
@@ -103,7 +104,7 @@ kubectl create -f ../../oai5gcore/nad/smf.yaml
 Create the resource
 
 ```bash
-kubectl create -f package/smfdeploy.yaml
+kubectl create -f package/deploy.yaml
 ```
 
 ## Development environment
@@ -121,12 +122,13 @@ Install the requirements
 pip install -r requirements.txt
 ```
 
-Make sure you copy operators `yaml` configuration file network functions `.conf` from `deployment/smf.yaml` and copy it to two different files and configure the env parameters 
+Make sure you copy operators `yaml` configuration file and network functions `yaml` configuration file from `deployment/nf.yaml` to two different files respectively and configure the env parameters:  
 
 ```bash
 export OP_CONF_PATH='/path-to/op/smf.yaml'
 export NF_CONF_PATH='/path-to/nf/smf.conf'
 ```
+
 Now start the operator
 
 ```bash

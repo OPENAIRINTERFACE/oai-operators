@@ -204,6 +204,10 @@ spec:
             value: '/tmp/op/nrf.yaml'
           - name: 'KUBERNETES_BASE_URL'
             value: 'https://kubernetes.default.svc'
+          - name: 'LOADBALANCER_IP'
+            value: '172.21.9.10'
+          - name: 'KUBERNETES_TYPE'
+            value: 'openshift'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf

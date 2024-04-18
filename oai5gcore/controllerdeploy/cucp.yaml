@@ -1,0 +1,313 @@
+################################################################################
+# Licensed to the OpenAirInterface (OAI) Software Alliance under one or more
+# contributor license agreements.  See the NOTICE file distributed with
+# this work for additional information regarding copyright ownership.
+# The OpenAirInterface Software Alliance licenses this file to You under
+# the terms found in the LICENSE file in the root of this source tree.
+#
+# Unless required by applicable law or agreed to in writing, software
+# distributed under the License is distributed on an "AS IS" BASIS,
+# WITHOUT WARRANTIES OR CONDITIONS OF ANY KIND, either express or implied.
+# See the License for the specific language governing permissions and
+# limitations under the License.
+#-------------------------------------------------------------------------------
+# For more information about the OpenAirInterface (OAI) Software Alliance:
+#      contact@openairinterface.org
+##################################################################################
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  namespace: default
+  name: oai-cucp-operator
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: oai-cucp-operator-cluster-role
+rules:
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create]
+  - apiGroups: ["security.openshift.io"]
+    resources: ["securitycontextconstraints"]
+    resourceNames: ["privileged"]
+    verbs: [use]
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch, create, update, patch]
+  - apiGroups: ["ref.nephio.org"]
+    resources: [configs,config]
+    verbs: [list, watch, update, patch, get]
+  - apiGroups: ["rbac.authorization.k8s.io"]
+    resources: [roles,rolebindings]
+    verbs: [get, create, delete, patch]
+  - apiGroups: ["workload.nephio.org"]
+    resources: [nfdeployments,nfdeployments/status,nfconfigs,nfdeployments/finalizers]
+    verbs: [get, list, watch, update, patch]
+  - apiGroups: [""]
+    resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims,services/finalizers,serviceaccounts/finalizers]
+    verbs:  [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["apps","extensions"]
+    resources: [deployments,deployments/status,deployments/finalizers]
+    verbs:  [get, list, watch, create, update, patch, delete]
+  - apiGroups: ["k8s.cni.cncf.io"]
+    resources: [network-attachment-definitions]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [""]
+    resources: [namespaces]
+    verbs: [list, watch]
+  - apiGroups: [admissionregistration.k8s.io/v1, admissionregistration.k8s.io/v1beta1]
+    resources: [validatingwebhookconfigurations, mutatingwebhookconfigurations]
+    verbs: [create, patch]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: oai-cucp-operator-rolebinding-cluster
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: oai-cucp-operator-cluster-role
+subjects:
+  - kind: ServiceAccount
+    name: oai-cucp-operator
+    namespace: default
+## In case you want to restrict to a namespace uncomment this role and remove the rights from cluster role
+#---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: Role
+# metadata:
+#   namespace: default
+#   name: oai-cucp-operator-role
+# rules:
+#   # Framework: posting the events about the handlers progress/errors.
+#   - apiGroups: [""]
+#     resources: [events]
+#     verbs: [create]
+#   - apiGroups: ["workload.nephio.org"]
+#     resources: [cucpdeployments,cucpdeployments/status]
+#     verbs: [list, watch, update, patch]
+#   - apiGroups: [""]
+#     resources: [pods, serviceaccounts, configmaps, services, persistentvolumeclaims]
+#     verbs:  [get, list, watch, create, update, patch, delete]
+#   - apiGroups: ["apps","extensions"]
+#     resources: [deployments,deployments/status]
+#     verbs:  [get, list, watch, create, update, patch, delete]
+# ---
+# apiVersion: rbac.authorization.k8s.io/v1
+# kind: RoleBinding
+# metadata:
+#   namespace: default
+#   name: oai-cucp-operator-rolebinding-namespaced
+# roleRef:
+#   apiGroup: rbac.authorization.k8s.io
+#   kind: Role
+#   name: oai-cucp-operator-role
+# subjects:
+#   - kind: ServiceAccount
+#     name: oai-cucp-operator
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oai-cucp-op-conf
+data:
+  cucp.yaml: |
+    nad: 
+      parent: 'eth0'
+      create: False
+    # these ports are here for creating the kube-svc should be same for the nf
+    nfInterfaces:
+      f1c: 'f1c'
+      e1: 'e1'
+      n2: 'n2'
+    ports:
+      - name: 'f1ap'
+        port: 38472
+        protocol: SCTP
+      - name: 'e1'
+        port: 38462
+        protocol: SCTP
+    compute:
+      req:
+        cpu: '100m'
+        memory: '512Mi'
+      limits:
+        cpu: '100m'
+        memory: '512Mi'
+    amfIpaddress: 192.168.30.2
+    image: 'docker.io/oaisoftwarealliance/oai-gnb:2024.w15'
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: oai-cucp-nf-conf
+data:
+  cucp.conf: |
+    Active_gNBs = ( "{{ conf['RANConfig']['gNBName'] }}");
+    # Asn1_verbosity, choice in: none, info, annoying
+    Asn1_verbosity = "none";
+    Num_Threads_PUSCH = 8;
+    sa = 1;
+
+    gNBs =
+    (
+     {
+        ////////// Identification parameters:
+    #     cell_type =  "CELL_MACRO_GNB";
+
+        gNB_ID    =  0x{{ conf['RANConfig']['gNBID'] }};
+        gNB_name  =  "{{ conf['RANConfig']['gNBName'] }}";
+        // Tracking area code, 0x0000 and 0xfffe are reserved values
+        tracking_area_code  = {{ conf['PLMN']['PLMNInfo'][0]['tac'] }};
+        plmn_list = ({ mcc = {{ conf['PLMN']['PLMNInfo'][0]['plmnID']['mcc'] }}; mnc = {{ conf['PLMN']['PLMNInfo'][0]['plmnID']['mnc'] }}; mnc_length = 2; snssaiList = ({ sst = {{ conf['PLMN']['PLMNInfo'][0]['nssai'][0]['sst'] }} }) });
+
+        nr_cellid = {{ conf['RANConfig']['nrCellId'] }};
+
+        tr_s_preference = "f1";
+
+        local_s_if_name = "{{ conf['nfInterfaces']['f1c'] }}";
+        local_s_address = "{{ conf['nfInterfaces']['f1cIpaddress'] }}";
+        remote_s_address = "127.0.0.1";
+        local_s_portc   = 501;
+        local_s_portd   = 2153;
+        remote_s_portc  = 500;
+        remote_s_portd  = 2153;
+
+        # ------- SCTP definitions
+        SCTP :
+        {
+            # Number of streams to use in input/output
+            SCTP_INSTREAMS  = 2;
+            SCTP_OUTSTREAMS = 2;
+        };
+
+
+        ////////// AMF parameters:
+        amf_ip_address      = ( { ipv4       = "{{ conf['amfIpaddress'] }}";
+                                  ipv6       = "192:168:30::17";
+                                  active     = "yes";
+                                  preference = "ipv4";
+                                }
+                              );
+
+        E1_INTERFACE =
+        (
+          {
+            type = "cp";
+            ipv4_cucp = "{{ conf['nfInterfaces']['e1Ipaddress'] }}";
+            port_cucp = 38462;
+            ipv4_cuup = "127.0.0.1";
+            port_cuup = 38462;
+          }
+        )
+
+        NETWORK_INTERFACES :
+        {
+          GNB_INTERFACE_NAME_FOR_NG_AMF            = "{{ conf['nfInterfaces']['n2'] }}";
+          GNB_IPV4_ADDRESS_FOR_NG_AMF              = "{{ conf['nfInterfaces']['n2Ipaddress'] }}";
+        };
+      }
+    );
+
+    security = {
+      # preferred ciphering algorithms
+      # the first one of the list that an UE supports in chosen
+      # valid values: nea0, nea1, nea2, nea3
+      ciphering_algorithms = ( "nea0" );
+
+      # preferred integrity algorithms
+      # the first one of the list that an UE supports in chosen
+      # valid values: nia0, nia1, nia2, nia3
+      integrity_algorithms = ( "nia2", "nia0" );
+
+      # setting 'drb_ciphering' to "no" disables ciphering for DRBs, no matter
+      # what 'ciphering_algorithms' configures; same thing for 'drb_integrity'
+      drb_ciphering = "yes";
+      drb_integrity = "no";
+    };
+         log_config :
+         {
+           global_log_level                      ="info";
+           hw_log_level                          ="info";
+           phy_log_level                         ="info";
+           mac_log_level                         ="info";
+           rlc_log_level                         ="info";
+           pdcp_log_level                        ="info";
+           rrc_log_level                         ="info";
+           f1ap_log_level                         ="info";
+           ngap_log_level                         ="info";
+        };
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: oai-cucp-controller
+  labels:
+    app.kubernetes.io/name: oai-cucp
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: oai-cucp
+  strategy:
+    type: Recreate
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: oai-cucp
+    spec:
+      securityContext:
+        runAsGroup: 0
+        runAsUser: 0
+      containers:
+      - name: cucp-controller
+        image: "docker.io/arorasagar/oai-cucp-controller:v2.0.1"
+#        command: ["sleep","10000"]
+        imagePullPolicy: Always
+        env:
+          - name: 'NF_TYPE'
+            value: 'cucp'
+          - name: 'DEPLOYMENT_FETCH_INTERVAL'
+            value: '1'
+          - name: 'DEPLOYMENT_FETCH_ITERATIONS'
+            value: '100'
+          - name: 'NF_CONF_PATH'
+            value: '/tmp/nf/cucp.yaml'
+          - name: 'OP_CONF_PATH'
+            value: '/tmp/op/cucp.yaml'
+          - name: 'TESTING'
+            value: 'no'
+          - name: 'KUBERNETES_BASE_URL'
+            value: 'https://kubernetes.default.svc'
+          - name: 'KUBERNETES_TYPE'
+            value: 'openshift'
+        volumeMounts:
+          - mountPath: /tmp/op
+            name: opconf
+          - mountPath: /tmp/nf
+            name: nfconf
+        resources:
+          requests:
+            memory: "256Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "100m"
+        # livenessProbe:
+        #   httpGet:
+        #     path: /healthz
+        #     port: 8080
+        #   initialDelaySeconds: 2
+        #   periodSeconds: 5
+      volumes:
+      - configMap:
+          name: oai-cucp-op-conf
+        name: opconf
+      - configMap:
+          name: oai-cucp-nf-conf
+        name: nfconf
+      dnsPolicy: ClusterFirst
+      restartPolicy: Always
+      serviceAccountName: oai-cucp-operator
+      terminationGracePeriodSeconds: 5

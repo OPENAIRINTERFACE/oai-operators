@@ -296,6 +296,8 @@ spec:
             value: 'no'
           - name: 'KUBERNETES_BASE_URL'
             value: 'https://kubernetes.default.svc'
+          - name: 'KUBERNETES_TYPE'
+            value: 'openshift'
         volumeMounts:
           - mountPath: /tmp/op
             name: opconf

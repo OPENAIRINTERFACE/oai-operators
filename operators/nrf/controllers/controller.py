@@ -46,7 +46,6 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     nf_resources = conf['compute']
     conf.update({
-                'maxSubscribers': spec.get('maxSubscribers',1000),
                 'interfaces': spec.get('interfaces'),
                 'networkInstances': spec.get('networkInstances')
                 })
@@ -151,7 +150,6 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
     #fetch the current cm
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     conf.update({
-                'maxSubscribers': spec.get('maxSubscribers',1000),
                 'interfaces': spec.get('interfaces'),
                 'networkInstances': spec.get('networkInstances')
                 })
@@ -404,7 +402,6 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
                                                   labels=LABEL)
     conf = yaml.safe_load(Path(OP_CONF_PATH).read_text())
     conf.update({
-                'maxSubscribers': spec.get('maxSubscribers',1000),
                 'interfaces': spec.get('interfaces'),
                 'networkInstances': spec.get('networkInstances')
                 })

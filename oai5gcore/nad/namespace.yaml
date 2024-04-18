@@ -27,3 +27,12 @@ metadata:
     pod-security.kubernetes.io/warn: "privileged"
     pod-security.kubernetes.io/audit: "privileged"
     pod-security.kubernetes.io/enforce: "privileged"
+---
+apiVersion: v1
+kind: Namespace
+metadata:
+  name: oairan
+  labels:
+    pod-security.kubernetes.io/warn: "privileged"
+    pod-security.kubernetes.io/audit: "privileged"
+    pod-security.kubernetes.io/enforce: "privileged"

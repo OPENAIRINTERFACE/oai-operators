@@ -91,7 +91,7 @@ def create_deployment(name: str=None,
     :type sa_name: str
     :param logger: logger
     :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
-    :param nad: network attachement defination
+    :param nad: network attachement definition
     :type nad: dict
     :param kopf: Instance of kopf
     :return: deployment

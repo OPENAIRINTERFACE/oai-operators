@@ -3,7 +3,7 @@ kind: NetworkAttachmentDefinition
 metadata:
   name: oai-amf-n2
 spec:
-  config: '{"cniVersion":"0.3.1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.2.2.254/24","gateway":"172.2.2.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
+  config: '{"cniVersion":"0.3.1","name": "oai-amf-n2","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static"}}]}'
 ---
 apiVersion: workload.nephio.org/v1alpha1
 kind: NFConfig
@@ -60,8 +60,8 @@ spec:
   interfaces:
   - name: n2
     ipv4:
-      address: 14.0.0.2/24
-      gateway: 13.0.0.1
+      address: 192.168.30.2/24
+      gateway: 192.168.30.1
   networkInstances:
   - name: vpc-ran
     interfaces:

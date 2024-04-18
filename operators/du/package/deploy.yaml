@@ -1,0 +1,118 @@
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: du-edge-f1
+spec:
+  config: '{"cniVersion":"0.3.1","name": "du-edge-f1","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static"}}]}'
+---
+apiVersion: k8s.cni.cncf.io/v1
+kind: NetworkAttachmentDefinition
+metadata:
+  name: du-edge-mplane
+spec:
+  config: '{"cniVersion":"0.3.1","name": "du-edge-mplane","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static"}}]}'
+---
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFConfig
+metadata:
+  name: du-edge-config
+  namespace: oaicp
+spec:
+  configRefs:
+    - apiVersion: workload.nephio.org/v1alpha1
+      kind: RANConfig
+      metadata:
+        name: ranconfig
+      spec:
+        gNBID: 12
+        rfSimulated: false
+        nrCellId: 1
+        duID: 12
+        duName: oai-benetel
+        physicalCellID: 0
+        forceUL256qamOff: 1
+        pdschAntennaPortsXP: 2
+        puschAntennaPorts: 4
+        ruConfig:
+          nbTx: 4
+          nbRx: 4
+          cPlaneMacAdd: 70:b3:d5:e1:5b:ff
+          uPlaneMacAdd: 70:b3:d5:e1:5b:ff
+          mtu: 9216
+        frequencyInfoDL:
+          absoluteFrequencySSB: 623328
+          dlFrequencyBand: 78
+          dlAbsoluteFrequencyPointA: 620052
+          dlSubcarrierSpacing: 1
+          dlCarrierBandwidth: 273
+        frequencyInfoUL:
+          ulFrequencyBand: 78
+          ulSubcarrierSpacing: 1
+          ulCarrierBandwidth: 273
+        rachConfigCommon:
+          prachConfigurationIndex: 151
+        slotPattern:
+          dlUlTransmissionPeriodicity: 6
+          nrofDownlinkSlots: 7
+          nrofDownlinkSymbols: 6
+          nrofUplinkSlots: 2
+          nrofUplinkSymbols: 4
+    - apiVersion: workload.nephio.org/v1alpha1
+      kind: PLMN
+      metadata:
+        name: plmn
+      spec:
+        PLMNInfo:
+        - plmnID:
+            mcc: "001"
+            mnc: "01"
+          tac: 1
+          nssai:
+          - sd: ffffff
+            sst: 1
+---
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFDeployment
+metadata:
+  name: du-edge
+  namespace: oaicp
+spec:
+  provider: du.openairinterface.org
+  interfaces:
+  - name: f1
+    ipv4:
+      address: 192.168.32.4/24
+      gateway: 192.168.32.1
+    vlanID: 32
+  - name: mplane
+    ipv4:
+      address: 10.10.0.200/8
+      gateway: 10.0.0.1
+    vlanID: 1
+  - name: cplane
+    mac: 00:11:22:33:44:67
+    vlanID: 3
+    sriov: true
+  - name: uplane
+    mac: 00:11:22:33:44:66
+    vlanID: 3
+    sriov: true
+  networkInstances:
+  - name: vpc-cudu-f1
+    interfaces:
+    - f1
+  ## used for m-plane communication
+  - name: vpc-mplane
+    interfaces:
+    - mplane
+  - name: vpc-fronthaul
+    interfaces:
+    - cplane
+  - name: vpc-fronthaul
+    interfaces:
+    - uplane
+  parametersRefs:
+  - name: du-edge-config
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NFConfig
+

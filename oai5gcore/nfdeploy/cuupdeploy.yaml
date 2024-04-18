@@ -1,0 +1,66 @@
+---
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFConfig
+metadata:
+  name: cuup-edge-config
+spec:
+  configRefs:
+    - apiVersion: workload.nephio.org/v1alpha1
+      kind: RANConfig
+      metadata:
+        name: ranconfig
+      spec:
+        gNBID: 12
+        gNBName: oai-benetel
+        cuupID: 1
+    - apiVersion: workload.nephio.org/v1alpha1
+      kind: PLMN
+      metadata:
+        name: plmn
+      spec:
+        PLMNInfo:
+        - plmnID:
+            mcc: "001"
+            mnc: "01"
+          tac: 1
+          nssai:
+          - sd: ffffff
+            sst: 1
+---
+apiVersion: workload.nephio.org/v1alpha1
+kind: NFDeployment
+metadata:
+  name: cuup-edge
+spec:
+  provider: cuup.openairinterface.org
+  interfaces:
+  - name: n3
+    ipv4:
+      address: 192.168.30.5/24
+      gateway: 192.168.30.1
+    vlanID: 30
+  - name: f1u
+    ipv4:
+      address: 192.168.32.3/24
+      gateway: 192.168.32.1
+    vlanID: 32
+  - name: e1
+    ipv4:
+      address: 192.168.33.3/24
+      gateway: 192.168.33.1
+    vlanID: 33
+  networkInstances:
+  - name: vpc-ran
+    interfaces:
+    - n3
+  - name: vpc-cudu-f1
+    interfaces:
+    - f1u
+  - name: vpc-cu-e1
+    interfaces:
+    - e1
+  parametersRefs:
+  - name: cuup-edge-config
+    apiVersion: workload.nephio.org/v1alpha1
+    kind: NFConfig
+    

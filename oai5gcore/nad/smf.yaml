@@ -20,4 +20,5 @@ metadata:
   name: smf-core-n4
   namespace: oaicp
 spec:
-  config: '{"cniVersion":"0.3.1","name":"smf-core-n4","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static","addresses":[{"address":"172.1.1.254/24","gateway":"172.1.1.1"}]}},{"type":"tuning","capabilities":{"mac":true},"ipam":{}}]}'
+  config: '{"cniVersion":"0.3.1","name": "smf-core-n4","plugins":[{"type":"macvlan","capabilities":{"ips":true},"master":"eth0","mode":"bridge","ipam":{"type":"static"}}]}'
+  

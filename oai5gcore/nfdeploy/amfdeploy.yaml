@@ -21,14 +21,14 @@ spec:
                 dnnInfo:
                   - name: internet
                     sessionType: ipv4
-                    dns: 8.8.8.8
+                    dns: 172.21.3.100
     - apiVersion: cellular.nephio.org/v1alpha1
       kind: ServedGUAMI
       metadata:
         name: oai-served-guami
       spec:
         - amfID:
-            amfPointer: '01'
+            amfPointer: '001'
             amfRegionID: '01'
             amfSetID: '001'
           plmnID:
@@ -47,9 +47,9 @@ spec:
   interfaces:
   - name: n2
     ipv4:
-      address: 172.2.2.254/24
-      gateway: 172.2.2.1
-    vlanID: 4
+      address: 192.168.30.2/24
+      gateway: 192.168.30.1
+    vlanID: 30
   networkInstances:
   - name: vpc-ran
     interfaces:
