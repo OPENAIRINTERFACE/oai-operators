@@ -128,10 +128,10 @@ data:
         port: 80
         protocol: TCP
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-smf:v2.0.1'
+    image: 'docker.io/oaisoftwarealliance/oai-smf-ubi:v2.0.1'
     ueSettings:
       mtu: 1500
-      secondary: 1.1.1.1
+      secondary: 8.8.8.8
     fqdn:
       nrf: 'oai-nrf'
       udm: 'oai-udm'

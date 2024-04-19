@@ -136,7 +136,7 @@ data:
         cpu: '100m'
         memory: '512Mi'
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-amf:v2.0.1'
+    image: 'docker.io/oaisoftwarealliance/oai-amf-ubi:v2.0.1'
     fqdn:
       smf: 'oai-smf'
       ausf: 'oai-ausf'

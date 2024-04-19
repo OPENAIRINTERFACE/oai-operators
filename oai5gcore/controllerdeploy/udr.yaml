@@ -122,13 +122,13 @@ data:
       sbi: 'eth0'
     compute:
       req:
-        cpu: '100m'
+        cpu: '200m'
         memory: '512Mi'
       limits:
-        cpu: '100m'
+        cpu: '200m'
         memory: '512Mi'
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-udr:v2.0.1'
+    image: 'docker.io/oaisoftwarealliance/oai-udr-ubi:v2.0.1'
     fqdn:
       nrf: oai-nrf
     database:

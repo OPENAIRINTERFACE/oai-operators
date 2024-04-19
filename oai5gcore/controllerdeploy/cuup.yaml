@@ -138,7 +138,7 @@ data:
       limits:
         cpu: '100m'
         memory: '512Mi'
-    image: 'docker.io/oaisoftwarealliance/oai-nr-cuup:2024.w15'
+    image: 'docker.io/oaisoftwarealliance/oai-cu-up-ubi:develop-74977924'
     cucpIpaddress: 192.168.33.2
 ---
 apiVersion: v1

@@ -135,13 +135,13 @@ data:
       n9: 'eth0'
     compute:
       req:
-        cpu: '100m'
-        memory: '512Mi'
+        cpu: '1'
+        memory: '1Gi'
       limits:
-        cpu: '100m'
-        memory: '512Mi'
+        cpu: '2'
+        memory: '1Gi'
     logLevel: debug
-    image: 'docker.io/oaisoftwarealliance/oai-upf:v2.0.1'
+    image: 'docker.io/oaisoftwarealliance/oai-upf-ubi:v2.0.1'
     fqdn:
       nrf: '172.21.9.10'
       smf: '127.0.0.1'

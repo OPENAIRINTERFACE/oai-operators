@@ -130,13 +130,13 @@ data:
         protocol: SCTP
     compute:
       req:
-        cpu: '100m'
+        cpu: '200m'
         memory: '512Mi'
       limits:
-        cpu: '100m'
+        cpu: '200m'
         memory: '512Mi'
     amfIpaddress: 192.168.30.2
-    image: 'docker.io/oaisoftwarealliance/oai-gnb:2024.w15'
+    image: 'docker.io/oaisoftwarealliance/oai-gnb-ubi:72'
 ---
 apiVersion: v1
 kind: ConfigMap

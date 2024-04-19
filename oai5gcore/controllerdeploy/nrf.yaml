@@ -128,7 +128,7 @@ data:
         cpu: '100m'
         memory: '256Mi'
     logLevel: info
-    image: 'docker.io/oaisoftwarealliance/oai-nrf:v2.0.1'
+    image: 'docker.io/oaisoftwarealliance/oai-nrf-ubi:v2.0.1'
     nfInterfaces:
       sbi: 'eth0'
     ports:
