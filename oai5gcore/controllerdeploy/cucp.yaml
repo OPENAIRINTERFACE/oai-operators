@@ -282,7 +282,7 @@ spec:
           - name: 'TESTING'
             value: 'no'
           - name: 'KUBERNETES_BASE_URL'
-            value: 'https://kubernetes.oaiops.svc'
+            value: 'https://kubernetes.default.svc'
           - name: 'KUBERNETES_TYPE'
             value: 'openshift'
         volumeMounts:
