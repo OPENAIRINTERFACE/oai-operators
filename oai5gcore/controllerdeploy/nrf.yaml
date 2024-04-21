@@ -44,6 +44,9 @@ rules:
   - apiGroups: ["workload.nephio.org"]
     resources: [nfdeployments,nfdeployments/status,nfconfigs,nfdeployments/finalizers]
     verbs: [get, list, watch, update, patch]
+  - apiGroups: ["route.openshift.io"]
+    resources: ["routes"]
+    verbs:  [get, list, watch, create, update, patch, delete]
   - apiGroups: [""]
     resources: [pods, serviceaccounts, configmaps, services,services/finalizers,serviceaccounts/finalizers]
     verbs:  [get, list, watch, create, update, patch, delete]
@@ -129,6 +132,7 @@ data:
         memory: '256Mi'
     logLevel: info
     image: 'docker.io/oaisoftwarealliance/oai-nrf-ubi:v2.0.1'
+    httpVersion: 1
     nfInterfaces:
       sbi: 'eth0'
     ports:
@@ -147,7 +151,7 @@ data:
     # Log level
     log_level:
       nrf: {{ conf['logLevel'] }}
-    http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
+    http_version: {{ conf['httpVersion'] }}  # allowed value 1 and 2, make sure all NFs use the same HTTP version
     ############## SBI Interfaces
     ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
     nfs:
@@ -205,7 +209,7 @@ spec:
           - name: 'KUBERNETES_BASE_URL'
             value: 'https://kubernetes.default.svc'
           - name: 'LOADBALANCER_IP'
-            value: '172.21.9.10'
+            value: '172.21.9.50'
           - name: 'KUBERNETES_TYPE'
             value: 'openshift'
         volumeMounts:
@@ -237,3 +241,4 @@ spec:
       restartPolicy: Always
       serviceAccountName: oai-nrf-operator
       terminationGracePeriodSeconds: 5
+      

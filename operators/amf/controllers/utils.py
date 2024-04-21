@@ -62,6 +62,7 @@ def create_deployment(name: str=None,
                     sa_name: str=None,
                     nad:dict=None,
                     logger=None,
+                    http_version:int=2,
                     kopf=None):
     '''
     :param name: name of the crd object
@@ -90,6 +91,8 @@ def create_deployment(name: str=None,
     :type sa_name: str
     :param logger: logger
     :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :param http_version: http version 1 or 2
+    :type http_version: int
     :param nad: network attachement definition
     :type nad: dict
     :param kopf: Instance of kopf
@@ -109,7 +112,9 @@ def create_deployment(name: str=None,
             )
     if nrf_svc is None:
         nrf_svc = "oai-nrf" #default value
-    URL = f"curl --connect-timeout 1 --head -X GET http://{nrf_svc}/nnrf-nfm/v1/nf-instances?nf-type='NRF' --http2-prior-knowledge"
+    URL = f"curl --connect-timeout 1 --head -X GET http://{nrf_svc}/nnrf-nfm/v1/nf-instances?nf-type='NRF'"
+    if http_version==2:
+        URL+= " --http2-prior-knowledge"
     deployment = {
                   "apiVersion": "apps/v1",
                   "kind": "Deployment",

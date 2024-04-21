@@ -407,7 +407,7 @@ def create_svc(name: str=None,
                 'name':port['name'],
                 'port':int(port['port']),
                 'protocol':port['protocol'],
-                'targetPort': int(port['port'])
+                'targetPort': port['name']
             }
             )
     # SVC_TYPE (LoadBalancer,ClusterIP,NodePort)
@@ -416,12 +416,7 @@ def create_svc(name: str=None,
           "kind": "Service",
           "metadata": {
             "name": name,
-            "labels": labels,
-            "annotations":
-                {
-                "skupper.io/proxy": "http2",
-                "skupper.io/address": f"{name}-shared"
-                }
+            "labels": labels
           },
           "spec": {
             "type": SVC_TYPE,
@@ -452,6 +447,74 @@ def create_svc(name: str=None,
         raise kopf.PermanentError(f"Can not create service {name} in namespace {namespace} reason {e.reason}")
 
     return {'creation_timestamp':creation_timestamp,'name':name}
+
+
+def create_route(name: str=None, 
+               namespace: str=None, 
+               labels: dict=None, 
+               ports: list=None,
+               logger=None,
+               target_port: str=None,
+               svc_name: str=None,
+               kopf=None
+            ):
+    '''
+    :param name: name of the configmap
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param labels: labels
+    :type labels: dict
+    :param ports: ports 
+    :type config: dict
+    :param svc_name: svc name
+    :type svc_name: str
+    :param target_port: target port name
+    :type target_port: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :param kopf: Instance of kopf
+    :return: status
+    :rtype: dict
+    ''' 
+
+    body =  {
+              "apiVersion": "route.openshift.io/v1",
+              "kind": "Route",
+              "metadata": {
+                "name": str(name).lower(),
+                "labels": labels,
+                "namespace": str(namespace).lower()
+              },
+              "spec": {
+                "port": {
+                  "targetPort": str(target_port)
+                },
+                "to": {
+                  "kind": "Service",
+                  "name": str(svc_name),
+                  "weight": 100
+                }
+              }
+            }
+
+    headers = {"Content-type": "application/json",
+        "Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r = requests.post(f"{KUBERNETES_BASE_URL}/apis/route.openshift.io/v1/namespaces/{namespace}/routes", headers=headers, json=body, verify=HTTPS_VERIFY)
+    logger.debug("Response of request to create route %s response %s" %(r.request.url, r.json()))
+
+    if r.status_code in [200,201]:
+        Response = {'status':True,'name':name}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 401:
+        Response = {'status': False}
+    else:
+        Response = {'status':False}
+
+    return Response
+
 
 def get_param_ref(name: str=None, namespace: str=None,
               logger=None):
@@ -569,6 +632,33 @@ def delete_role(name: str=None, namespace: str=None, logger=None):
     headers = {"Accept": "application/json",
         "Authorization": "Bearer {}".format(TOKEN)}
     r=requests.delete(f"{KUBERNETES_BASE_URL}/apis/rbac.authorization.k8s.io/v1/namespaces/{namespace}/roles/{name}", headers=headers, verify=HTTPS_VERIFY)
+    logger.debug(f"Response of the request {r.request.url} response {r.json()}")
+    if r.status_code in [200,204]:
+        Response = {'status':True}
+    elif r.status_code == 202:
+        Response = {'status':False}
+    elif r.status_code == 404:
+        Response = {'status':False}
+    else:
+        Response = {'status':False}
+    return Response
+
+#delete route
+def delete_route(name: str=None, namespace: str=None, logger=None):
+    '''
+    :param name: name of the role
+    :type name: str
+    :param namespace: Namespace name
+    :type namespace: str
+    :param logger: logger
+    :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
+    :return: Response
+    :rtype: dict
+    '''
+
+    headers = {"Accept": "application/json",
+        "Authorization": "Bearer {}".format(TOKEN)}
+    r = requests.delete(f"{KUBERNETES_BASE_URL}/apis/route.openshift.io/v1/namespaces/{namespace}/routes/{name}", headers=headers,verify=HTTPS_VERIFY)
     logger.debug(f"Response of the request {r.request.url} response {r.json()}")
     if r.status_code in [200,204]:
         Response = {'status':True}

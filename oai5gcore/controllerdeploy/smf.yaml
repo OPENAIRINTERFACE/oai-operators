@@ -132,6 +132,7 @@ data:
     ueSettings:
       mtu: 1500
       secondary: 8.8.8.8
+    http_version: 1
     fqdn:
       nrf: 'oai-nrf'
       udm: 'oai-udm'
@@ -157,7 +158,7 @@ data:
     # If you enable registration, the other NFs will use the NRF discovery mechanism
     register_nf:
       general: yes
-    http_version: 2
+    http_version: {{ conf['httpVersion'] }}
     ## general single_nssai configuration
     ## Defines YAML anchors, which are reused in the config file
     snssais:

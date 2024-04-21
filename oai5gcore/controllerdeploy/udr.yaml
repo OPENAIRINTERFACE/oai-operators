@@ -128,6 +128,7 @@ data:
         cpu: '200m'
         memory: '512Mi'
     logLevel: info
+    httpVersion: 1
     image: 'docker.io/oaisoftwarealliance/oai-udr-ubi:v2.0.1'
     fqdn:
       nrf: oai-nrf
@@ -151,7 +152,7 @@ data:
     # If you enable registration, the NF will use the NRF discovery mechanism
     register_nf:
       udr: 'yes'
-    http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
+    http_version: {{ conf['httpVersion'] }}  # allowed value 1 and 2, make sure all NFs use the same HTTP version
     ############## SBI Interfaces
     ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
     nfs:
@@ -218,7 +219,7 @@ spec:
           - name: 'TESTING'
             value: 'no'
           - name: 'SVC_TYPE'
-            value: 'LoadBalancer'
+            value: 'ClusterIP'
           - name: 'KUBERNETES_BASE_URL'
             value: 'https://kubernetes.default.svc'
           - name: 'KUBERNETES_TYPE'

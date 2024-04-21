@@ -65,6 +65,7 @@ def create_deployment(name: str=None,
                     config_map: str=None, 
                     nf_type: str=None, 
                     sa_name: str=None,
+                    http_version:int=2,
                     logger=None,
                     kopf=None):
     '''
@@ -92,6 +93,8 @@ def create_deployment(name: str=None,
     :type nf_type: str
     :param sa_name: sa_name name
     :type sa_name: str
+    :param http_version: http version 1 or 2
+    :type http_version: int
     :param logger: logger
     :type logger: <class 'kopf._core.actions.loggers.ObjectLogger'>
     :param kopf: Instance of kopf
@@ -111,7 +114,9 @@ def create_deployment(name: str=None,
             )
     if nrf_svc is None:
         nrf_svc = "oai-nrf" #default value
-    URL = f"curl --connect-timeout 1 --head -X GET http://{nrf_svc}/nnrf-nfm/v1/nf-instances?nf-type='NRF' --http2-prior-knowledge"
+    URL = f"curl --connect-timeout 1 --head -X GET http://{nrf_svc}/nnrf-nfm/v1/nf-instances?nf-type='NRF'"
+    if http_version==2:
+        URL+= " --http2-prior-knowledge"
     deployment = {
                   "apiVersion": "apps/v1",
                   "kind": "Deployment",

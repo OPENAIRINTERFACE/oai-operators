@@ -12,8 +12,8 @@ spec:
       spec:
         plmnInfo:
           - plmnID:
-              mcc: "001"
-              mnc: "01"
+              mcc: "208"
+              mnc: "99"
             tac: 1
             nssai:
               - sst: 1
@@ -28,12 +28,12 @@ spec:
         name: oai-served-guami
       spec:
         - amfID:
-            amfPointer: '001'
+            amfPointer: '01'
             amfRegionID: '01'
             amfSetID: '001'
           plmnID:
-            mcc: "001"
-            mnc: "01"
+            mcc: "208"
+            mnc: "99"
 ---
 apiVersion: workload.nephio.org/v1alpha1
 kind: NFDeployment

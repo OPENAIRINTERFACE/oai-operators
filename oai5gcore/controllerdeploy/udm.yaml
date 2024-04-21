@@ -120,6 +120,7 @@ data:
         protocol: TCP
     nfInterfaces:
       sbi: 'eth0'
+    http_version: 1
     compute:
       req:
         cpu: '100m'
@@ -145,7 +146,7 @@ data:
       udm: {{ conf['logLevel'] }}
     register_nf:
       udm: 'yes'
-    http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
+    http_version: {{ conf['httpVersion'] }}  # allowed value 1 and 2, make sure all NFs use the same HTTP version
     ############## SBI Interfaces
     ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
     nfs:

@@ -52,14 +52,22 @@ def create_fn(spec, namespace, logger, patch, **kwargs):
     if 'imagePullSecrets' not in conf.keys():
         conf.update({'imagePullSecrets':None})
     nf_ports = conf['ports']
-    svc_status = create_svc(name=f"oai-{NF_TYPE}",#kwargs['body']['metadata']['name'],
+    svc_status = create_svc(name=f"oai-{NF_TYPE}",
                           namespace=namespace,
                           labels=LABEL,
                           logger=logger,
                           ports=nf_ports,
                           kopf=kopf)
+    route_status = create_route(name=f"oai-{NF_TYPE}",
+                          namespace=namespace,
+                          labels=LABEL,
+                          svc_name=svc_status['name'],
+                          target_port='http',
+                          logger=logger,
+                          kopf=kopf)
     conf.update({'fqdn':{f"{NF_TYPE}":svc_status['name']}}) ## the svc name of the nf is an input for nf configuration
-
+    if KUBERNETES_TYPE=='openshift':
+        conf.update({'fqdn':{f"{NF_TYPE}":route_status['name']}}) ## the svc name of the nf is an input for nf configuration
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
     jinja_template = env.get_template(os.path.basename(NF_CONF_PATH))
@@ -173,6 +181,13 @@ def reconcile_fn(spec, namespace, logger, patch, **kwargs):
                                   labels=LABEL,
                                   logger=logger,
                                   ports=nf_ports,
+                                  kopf=kopf)
+            route_status = create_route(name=f"oai-{NF_TYPE}",
+                                  namespace=namespace,
+                                  labels=LABEL,
+                                  svc_name=svc_status['name'],
+                                  target_port='http',
+                                  logger=logger,
                                   kopf=kopf)
     conf.update({'fqdn':{f"{NF_TYPE}":svc_status['name']}}) ## the svc name of the nf is an input for nf configuration
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
@@ -321,6 +336,7 @@ def delete_fn(spec, name, namespace, logger, **kwargs):
 
     if KUBERNETES_TYPE == 'openshift' and get_role(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
         delete_role(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)
+        delete_route(name=f"oai-{NF_TYPE}",namespace=namespace, logger=logger)
         if get_role_binding(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)['status']:
             delete_role_binding(name=kwargs['body']['metadata']['name'], namespace=namespace, logger=logger)
 
@@ -426,8 +442,14 @@ def update_fn(diff, spec, namespace, logger, patch, **kwargs):
                                   logger=logger,
                                   ports=nf_ports,
                                   kopf=kopf)
+            route_status = create_route(name=f"oai-{NF_TYPE}",
+                                  namespace=namespace,
+                                  labels=LABEL,
+                                  svc_name=svc_status['name'],
+                                  target_port='http',
+                                  logger=logger,
+                                  kopf=kopf)
     conf.update({'fqdn':{f"{NF_TYPE}":svc_status['name']}}) ## the svc name of the nf is an input for nf configuration
-
     env = Environment(loader=FileSystemLoader(os.path.dirname(NF_CONF_PATH)))
     env.add_extension('jinja2.ext.do')
     jinja_template = env.get_template(os.path.basename(NF_CONF_PATH))

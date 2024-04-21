@@ -129,6 +129,7 @@ data:
         memory: '256Mi'
     logLevel: info
     image: 'docker.io/oaisoftwarealliance/oai-ausf-ubi:v2.0.1'
+    httpVersion: 1
     fqdn:
       udm: oai-udm
       nrf: oai-nrf
@@ -147,7 +148,7 @@ data:
     # If you enable registration, the NF will use the NRF discovery mechanism
     register_nf:
       ausf: 'yes'
-    http_version: 2  # allowed value 1 and 2, make sure all NFs use the same HTTP version
+    http_version: {{ conf['httpVersion'] }}  # allowed value 1 and 2, make sure all NFs use the same HTTP version
     ############## SBI Interfaces
     ### Each NF takes its local SBI interfaces and remote interfaces from here, unless it gets them using NRF discovery mechanisms
     nfs:

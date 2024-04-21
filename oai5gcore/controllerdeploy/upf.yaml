@@ -127,6 +127,7 @@ data:
       - name: 'sbi'
         port: 80
         protocol: TCP
+    httpVersion: 1
     nfInterfaces:
       sbi: 'eth0'
       n3: 'n3'
@@ -160,7 +161,7 @@ data:
     # If you enable registration, the other NFs will use the NRF discovery mechanism
     register_nf:
       upf: 'yes'
-    http_version: 2
+    http_version: {{ conf['httpVersion'] }}
     ## general single_nssai configuration
     ## Defines YAML anchors, which are reused in the config file
     snssais:

@@ -13,8 +13,8 @@ spec:
       spec:
         plmnInfo:
           - plmnID:
-              mcc: "001"
-              mcc: "01"
+              mcc: "208"
+              mnc: "99"
             tac: 1
             nssai:
               - sst: 1

@@ -179,13 +179,13 @@ def create_deployment(name: str=None,
                             "resources": {
                                 "requests": {
                                 "memory": compute['req']['memory'],
-                                "cpu": compute['req']['cpu']
+                                "cpu": compute['req']['cpu'],
                                 "hugepages-1Gi": compute['req']['hugepages'],
                                 f"openshift.io/{deployment_conf['sriovResource']}": compute['req']['sriov']
                                 },
                                 "limits": {
                                 "memory": compute['limits']['memory'],
-                                "cpu": compute['limits']['cpu']
+                                "cpu": compute['limits']['cpu'],
                                 "hugepages-1Gi": compute['limits']['hugepages'],
                                 f"openshift.io/{deployment_conf['sriovResource']}": compute['limits']['sriov']
                                 }

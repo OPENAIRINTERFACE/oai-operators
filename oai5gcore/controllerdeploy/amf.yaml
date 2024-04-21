@@ -137,6 +137,7 @@ data:
         memory: '512Mi'
     logLevel: info
     image: 'docker.io/oaisoftwarealliance/oai-amf-ubi:v2.0.1'
+    httpVersion: 1
     fqdn:
       smf: 'oai-smf'
       ausf: 'oai-ausf'
@@ -156,7 +157,7 @@ data:
     # If you enable registration, the other NFs will use the NRF discovery mechanism
     register_nf:
       amf: yes
-    http_version: 2
+    http_version: {{ conf['httpVersion'] }}
     ## general single_nssai configuration
     ## Defines YAML anchors, which are reused in the config file
     snssais:
