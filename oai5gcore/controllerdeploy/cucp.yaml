@@ -276,7 +276,7 @@ spec:
           - name: 'DEPLOYMENT_FETCH_ITERATIONS'
             value: '100'
           - name: 'NF_CONF_PATH'
-            value: '/tmp/nf/cucp.yaml'
+            value: '/tmp/nf/cucp.conf'
           - name: 'OP_CONF_PATH'
             value: '/tmp/op/cucp.yaml'
           - name: 'TESTING'
