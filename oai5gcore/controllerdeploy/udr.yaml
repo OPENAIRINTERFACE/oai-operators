@@ -203,7 +203,7 @@ spec:
         runAsUser: 0
       containers:
       - name: udr-controller
-        image: "docker.io/arorasagar/oai-udr-controller:v2.0.1"
+        image: "docker.io/arorasagar/oai-udr-controller:v2.0.2"
         imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'
