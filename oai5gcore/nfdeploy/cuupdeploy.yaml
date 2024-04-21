@@ -3,6 +3,7 @@ apiVersion: workload.nephio.org/v1alpha1
 kind: NFConfig
 metadata:
   name: cuup-edge-config
+  namespace: oairan
 spec:
   configRefs:
     - apiVersion: workload.nephio.org/v1alpha1
@@ -20,8 +21,8 @@ spec:
       spec:
         PLMNInfo:
         - plmnID:
-            mcc: "001"
-            mnc: "01"
+            mcc: "208"
+            mnc: "99"
           tac: 1
           nssai:
           - sd: ffffff
@@ -31,6 +32,7 @@ apiVersion: workload.nephio.org/v1alpha1
 kind: NFDeployment
 metadata:
   name: cuup-edge
+  namespace: oairan
 spec:
   provider: cuup.openairinterface.org
   interfaces:

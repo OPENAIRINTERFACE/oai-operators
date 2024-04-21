@@ -148,7 +148,7 @@ metadata:
   name: oai-du-nf-conf
 data:
   du.conf: |
-    Active_gNBs = ( "{{ conf['duName'] }}");
+    Active_gNBs = ( "{{  conf['RANConfig']['duName'] }}");
     # Asn1_verbosity, choice in: none, info, annoying
     Asn1_verbosity = "none";
     sa = 1;

@@ -107,20 +107,7 @@ def create_deployment(name: str=None,
                 'protocol':port['protocol']
             }
             )
-    args="""
-            CONF='/opt/oai-gnb/etc/du.conf';
-            E="";
-            PCI_ADDS=PCIDEVICE_OPENSHIFT_IO_${SRIOV_RESOURCE_NAME^^};
-            C_PLANE_PCI_ADD=$(echo ${!PCI_ADDS} | sed 's/,/ /g' | awk '{print $1}');
-            U_PLANE_PCI_ADD=$(echo ${!PCI_ADDS} | sed 's/,/ /g' | awk '{print $2}');
-            LIST=($(grep -oP '@[a-zA-Z0-9_]+@' $CONF | grep CORE | sed -e "s#@##g" ));
-            # CPUS=($(cat /sys/fs/cgroup/cpuset/cpuset.cpus | awk '/-/{for (i=$1; i<=$2; i++)printf "%s%s",i,ORS;next} 1' ORS=' ' RS=, FS=-));
-            for i in ${!LIST[*]}; do eval "${LIST[$i]}=${CPUS[$i]}";done;
-            VARS=$(grep -oP '@[a-zA-Z0-9_]+@' $CONF);
-            for v in ${VARS};do N=`echo $v | sed -e "s#@##g"`; E="${E} -e s/${v}/${!N}/g";E="${E#' -e '}";done;
-            sed -e ${E} $CONF | tee /tmp/du.conf;
-            exec /opt/oai-gnb/bin/nr-softmodem -O /tmp/du.conf $USE_ADDITIONAL_OPTIONS;
-        """
+    args="""CONF='/opt/oai-gnb/etc/du.conf';E="";PCI_ADDS=PCIDEVICE_OPENSHIFT_IO_${SRIOV_RESOURCE_NAME^^};C_PLANE_PCI_ADD=$(echo ${!PCI_ADDS} | sed 's/,/ /g' | awk '{print $1}');U_PLANE_PCI_ADD=$(echo ${!PCI_ADDS} | sed 's/,/ /g' | awk '{print $2}');LIST=($(grep -oP '@[a-zA-Z0-9_]+@' $CONF | grep CORE | sed -e "s#@##g" ));CPUS=($(cat /sys/fs/cgroup/cpuset/cpuset.cpus | awk '/-/{for (i=$1; i<=$2; i++)printf "%s%s",i,ORS;next} 1' ORS=' ' RS=, FS=-));for i in ${!LIST[*]}; do eval "${LIST[$i]}=${CPUS[$i]}";done;VARS=$(grep -oP '@[a-zA-Z0-9_]+@' $CONF);for v in ${VARS};do N=`echo $v | sed -e "s#@##g"`; E="${E} -e s/${v}/${!N}/g";E="${E#' -e '}";done;sed -e ${E} $CONF | tee /tmp/du.conf;exec /opt/oai-gnb/bin/nr-softmodem -O /tmp/du.conf $USE_ADDITIONAL_OPTIONS;"""
     deployment = {
                   "apiVersion": "apps/v1",
                   "kind": "Deployment",
@@ -151,6 +138,16 @@ def create_deployment(name: str=None,
                             "name": 'init',
                             "image": "docker.io/arorasagar/sctptester:latest",
                             "imagePullPolicy": "IfNotPresent",
+                            "resources": {
+                                "requests": {
+                                "memory": '50Mi',
+                                "cpu": '1m'
+                                },
+                                "limits": {
+                                "memory": '50Mi',
+                                "cpu": '1m'
+                                }
+                            },
                             "command": [
                             'sh', 
                             '-c',
@@ -197,7 +194,7 @@ def create_deployment(name: str=None,
                               {
                                 "mountPath": f"/opt/oai-gnb/etc",
                                 "name": "configuration"
-                              }
+                              },
                               {
                                 "mountPath": f"/dev/hugepages",
                                 "name": "hugepage"
@@ -213,12 +210,12 @@ def create_deployment(name: str=None,
                           }
                         ],
                         "volumes": [
-                          {
+                         {
                             "configMap": {
                               "name": config_map
                             },
                             "name": "configuration"
-                          }
+                          },
                           {
                             "emptyDir": {
                               "medium": "HugePages"
