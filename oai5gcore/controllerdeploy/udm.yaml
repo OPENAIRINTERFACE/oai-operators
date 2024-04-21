@@ -120,7 +120,7 @@ data:
         protocol: TCP
     nfInterfaces:
       sbi: 'eth0'
-    http_version: 1
+    httpVersion: 1
     compute:
       req:
         cpu: '100m'

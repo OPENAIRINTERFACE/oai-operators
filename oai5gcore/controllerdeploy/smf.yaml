@@ -132,7 +132,7 @@ data:
     ueSettings:
       mtu: 1500
       secondary: 8.8.8.8
-    http_version: 1
+    httpVersion: 1
     fqdn:
       nrf: 'oai-nrf'
       udm: 'oai-udm'
