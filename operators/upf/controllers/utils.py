@@ -150,7 +150,40 @@ def create_deployment(name: str=None,
                             'sh', 
                             '-c', 
                             f"until {URL}; do echo waiting for nrf svc {nrf_svc} to respond; sleep 1; done"
-                            ]
+                            ],
+                            "resources": {
+                                "requests": {
+                                "memory": '50Mi',
+                                "cpu": '1m'
+                                },
+                                "limits": {
+                                "memory": '50Mi',
+                                "cpu": '1m'
+                                },
+                            }
+                        },
+                        {
+                            "name": 'init-forward',
+                            "image": "docker.io/busybox:1.29",
+                            "imagePullPolicy": "IfNotPresent",
+                            "command": [
+                            '/bin/sh',
+                            '-c'
+                            ],
+                            "args": ["sysctl -w net.ipv4.ip_forward=1"],
+                            "securityContext": {
+                                "privileged": True
+                            },
+                            "resources": {
+                                "requests": {
+                                "memory": '50Mi',
+                                "cpu": '1m'
+                                },
+                                "limits": {
+                                "memory": '50Mi',
+                                "cpu": '1m'
+                                },
+                            }
                         }],
                         "containers": [
                           {

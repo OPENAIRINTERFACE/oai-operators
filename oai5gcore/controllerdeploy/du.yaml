@@ -130,15 +130,15 @@ data:
         protocol: UDP
     compute:
       req:
-        cpu: '9'
+        cpu: '8'
         memory: '8Gi'
         hugepages: '10Gi'
-        sriov: '2'
+        sriov: 2
       limits:
-        cpu: '9'
+        cpu: '8'
         memory: '8Gi'
         hugepages: '10Gi'
-        sriov: '2'
+        sriov: 2
     sriovResource: ruvfio
     cucpIpaddress: 192.168.32.2
     image: 'docker.io/oaisoftwarealliance/oai-gnb-ubi:72'

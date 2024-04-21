@@ -137,10 +137,10 @@ data:
     compute:
       req:
         cpu: '1'
-        memory: '1Gi'
+        memory: '512Mi'
       limits:
-        cpu: '2'
-        memory: '1Gi'
+        cpu: '1'
+        memory: '512Mi'
     logLevel: debug
     image: 'docker.io/oaisoftwarealliance/oai-upf-ubi:v2.0.1'
     fqdn:
