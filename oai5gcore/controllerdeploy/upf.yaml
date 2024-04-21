@@ -129,7 +129,7 @@ data:
         protocol: TCP
     httpVersion: 1
     nfInterfaces:
-      sbi: 'eth0'
+      sbi: 'n6'
       n3: 'n3'
       n4: 'n4'
       n6: 'n6'
@@ -142,9 +142,9 @@ data:
         cpu: '2'
         memory: '1Gi'
     logLevel: debug
-    image: 'docker.io/oaisoftwarealliance/oai-upf-ubi:v2.0.2'
+    image: 'docker.io/oaisoftwarealliance/oai-upf-ubi:v2.0.1'
     fqdn:
-      nrf: '172.21.9.10'
+      nrf: '172.21.9.50'
       smf: '127.0.0.1'
 ---
 apiVersion: v1
@@ -257,7 +257,7 @@ spec:
         runAsUser: 0
       containers:
       - name: upf-controller
-        image: "docker.io/arorasagar/oai-upf-controller:v2.0.1"
+        image: "docker.io/arorasagar/oai-upf-controller:v2.0.2"
         imagePullPolicy: Always
         env:
           - name: 'NF_TYPE'
